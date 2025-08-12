@@ -2,9 +2,8 @@
 
 set -e
 
-DEST_DIR="."
 OPENSSL_DIR="openssl-lts"
-DL_DIR="$DEST_DIR/dl"
+DL_DIR="dl"
 
 # Clean destination directory
 echo "Cleaning directory: $DL_DIR"
