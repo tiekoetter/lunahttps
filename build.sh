@@ -9,9 +9,12 @@ echo -e "*******************************************************
 
  Working with NGINX Version ""\""${nginxver}"\"
  OpenSSL with TLS 1.3 Support + kTLS
- ngx_http_geoip2_module
  HTTP3 / QUIC (experimental)
- Brotli
+ 
+ ngx_brotli
+ ngx_http_geoip2_module
+ headers-more-nginx-module
+ ngx_http_substitutions_filter_module
 
  Copyright © 2018-2025 Léon Tiekötter <leon@tiekoetter.com>
 *******************************************************
