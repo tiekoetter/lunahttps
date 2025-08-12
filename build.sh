@@ -19,20 +19,20 @@ echo -e "*******************************************************
 "
 echo -e "
 ${LIGHTBLUE}Starting OpenSSL downloader...${NC}"
-/root/luna/openssl-downloader.sh
+luna/openssl-downloader.sh
 
-cd /root/luna/nginx
+cd luna/nginx
 rm -R nginx-${nginxver}.tar.*
 rm -R nginx-${nginxver}/
 echo -e "
 ${LIGHTBLUE}Updating NGINX...${NC}"
 wget http://nginx.org/download/nginx-${nginxver}.tar.gz
 tar -xvzf nginx-${nginxver}.tar.gz
-cd /root/luna/nginx/nginx-${nginxver}/
+cd luna/nginx/nginx-${nginxver}/
 echo -e "
 ${LIGHTBLUE}Change NGINX to Luna-HTTP/S...${NC}"
-cp /root/luna/nginx-internals/ngx_http_header_filter_module.c /root/luna/nginx/nginx-${nginxver}/src/http/
-cp /root/luna/nginx-internals/ngx_http_special_response.c /root/luna/nginx/nginx-${nginxver}/src/http/
+cp luna/nginx-internals/ngx_http_header_filter_module.c luna/nginx/nginx-${nginxver}/src/http/
+cp luna/nginx-internals/ngx_http_special_response.c luna/nginx/nginx-${nginxver}/src/http/
 echo -e "${LIGHTBLUE}Configure Luna-HTTP/S...${NC}"
 ./configure \
     --prefix=/usr/share/nginx \
@@ -55,11 +55,11 @@ echo -e "${LIGHTBLUE}Configure Luna-HTTP/S...${NC}"
     --with-threads \
     --with-stream \
     --with-stream_ssl_module \
-    --add-module=/root/luna/modules/ngx_http_substitutions_filter_module \
-    --add-module=/root/luna/modules/headers-more-nginx-module \
-    --add-module=/root/luna/modules/ngx_http_geoip2_module \
-    --add-module=/root/luna/modules/ngx_brotli \
-    --with-openssl=/opt/openssl-lts \
+    --add-module=luna/modules/ngx_http_substitutions_filter_module \
+    --add-module=luna/modules/headers-more-nginx-module \
+    --add-module=luna/modules/ngx_http_geoip2_module \
+    --add-module=luna/modules/ngx_brotli \
+    --with-openssl=luna/openssl-lts \
     --with-openssl-opt=enable-ktls
 echo -e "
 ${LIGHTBLUE}Build Luna-HTTP/S and push to production...${NC}"
