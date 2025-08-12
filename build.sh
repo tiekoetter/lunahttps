@@ -23,11 +23,11 @@ echo -e "*******************************************************
 echo -e "
 ${LIGHTBLUE}Starting OpenSSL downloader...${NC}"
 cd luna
-openssl-downloader.sh
+./openssl-downloader.sh
 
+mkdir nginx
 cd nginx
-rm -R nginx-${nginxver}.tar.*
-rm -R nginx-${nginxver}/
+rm -R nginx-*
 echo -e "
 ${LIGHTBLUE}Updating NGINX...${NC}"
 wget http://nginx.org/download/nginx-${nginxver}.tar.gz
