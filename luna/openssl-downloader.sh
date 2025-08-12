@@ -35,6 +35,7 @@ tar -xzf "$FILENAME"
 # Get extracted directory name
 EXTRACTED_DIR=$(tar -tf "$FILENAME" | head -n1 | cut -d/ -f1)
 
+cd ..
 cp -R "$DL_DIR/$EXTRACTED_DIR/" "$OPENSSL_DIR"
 
 echo "Extraction complete. Final directory:"
