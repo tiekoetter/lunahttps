@@ -1,5 +1,5 @@
 #!/bin/bash
-nginxver=1.29.0
+nginxver=1.29.1
 LIGHTBLUE='\033[1;34m'
 GREEN='\033[0;32m'
 PURPLE='\033[0;35m'
