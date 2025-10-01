@@ -1,0 +1,21 @@
+{
+  "extends": ["config:recommended"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["^build\\.sh$"],
+      "matchStrings": ["nginxver=(?<currentValue>[0-9.]+)\\b"],
+      "depNameTemplate": "nginx/nginx",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchDepNames": ["nginx/nginx"],
+      "groupName": "nginx release",
+      "prPriority": 1
+    }
+  ]
+}
+
