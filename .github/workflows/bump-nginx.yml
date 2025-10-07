@@ -47,7 +47,7 @@ jobs:
 
       - name: Create PR
         if: steps.latest.outputs.latest != steps.current.outputs.current
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           commit-message: "[chore] Bump NGINX mainline from ${{ steps.current.outputs.current }} to ${{ steps.latest.outputs.latest }}"
           title: "Bump NGINX mainline to ${{ steps.latest.outputs.latest }}"
