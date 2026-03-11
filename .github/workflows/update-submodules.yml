@@ -21,8 +21,7 @@ jobs:
           fetch-depth: 0
 
       - name: Record current submodule commits
-        run: |
-          git submodule status --recursive > before.txt
+        run: git submodule status --recursive > "$RUNNER_TEMP/before_submodules.txt"
 
       - name: Update submodules
         run: |
@@ -30,51 +29,70 @@ jobs:
           git submodule update --init --remote --recursive
 
       - name: Record updated submodule commits
-        run: |
-          git submodule status --recursive > after.txt
+        run: git submodule status --recursive > "$RUNNER_TEMP/after_submodules.txt"
 
-      - name: Detect changes
-        id: changes
+      - name: Detect changes and build PR metadata
+        id: meta
+        shell: bash
         run: |
-          if diff -q before.txt after.txt >/dev/null; then
+          BEFORE="$RUNNER_TEMP/before_submodules.txt"
+          AFTER="$RUNNER_TEMP/after_submodules.txt"
+          BODY_FILE="$RUNNER_TEMP/commit_body.txt"
+
+          if diff -q "$BEFORE" "$AFTER" >/dev/null; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-      - name: Generate commit message
-        if: steps.changes.outputs.changed == 'true'
-        id: commitmsg
-        run: |
-          msg=""
-          while read -r before; do
-              path=$(echo "$before" | awk '{print $2}')
-              old=$(echo "$before" | awk '{print $1}' | tr -d '-')
-              new=$(grep " $path" after.txt | awk '{print $1}' | tr -d '-')
+          declare -a modules=()
+          : > "$BODY_FILE"
 
-              if [ "$old" != "$new" ]; then
-                  name=$(basename "$path")
-                  msg="$msg[chore] Bump $name from ${old:0:7} to ${new:0:7}\n"
-              fi
-          done < before.txt
+          while read -r before_line; do
+            path=$(awk '{print $2}' <<< "$before_line")
+            old=$(awk '{print $1}' <<< "$before_line" | tr -d '+-U')
+            after_line=$(grep -F " $path" "$AFTER" || true)
+            new=$(awk '{print $1}' <<< "$after_line" | tr -d '+-U')
 
-          printf "%b" "$msg" > commit_message.txt
-          echo "message<<EOF" >> "$GITHUB_OUTPUT"
-          cat commit_message.txt >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+            if [ -n "$new" ] && [ "$old" != "$new" ]; then
+              name=$(basename "$path")
+              modules+=("$name")
+              printf -- "- %s: %s -> %s\n" "$name" "${old:0:7}" "${new:0:7}" >> "$BODY_FILE"
+            fi
+          done < "$BEFORE"
+
+          if [ ${#modules[@]} -eq 0 ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          title="[chore] Bump $(IFS=', '; echo "${modules[*]}")"
+
+          {
+            echo "changed=true"
+            echo "title=$title"
+            echo "branch=ci/update-submodules"
+            echo "commit_body<<EOF"
+            cat "$BODY_FILE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Show updated submodule status
+        if: steps.meta.outputs.changed == 'true'
+        run: git submodule status --recursive
 
       - name: Create pull request
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.meta.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
-          commit-message: ${{ steps.commitmsg.outputs.message }}
-          title: "Update submodules"
-          body: |
-            Automated submodule update.
-
-            Updated submodules to their latest upstream commits.
-          branch: ci/update-submodules
+          branch: ${{ steps.meta.outputs.branch }}
           delete-branch: true
+          commit-message: |
+            ${{ steps.meta.outputs.title }}
+
+            ${{ steps.meta.outputs.commit_body }}
+          title: ${{ steps.meta.outputs.title }}
+          body: |
+            ${{ steps.meta.outputs.commit_body }}
           labels: |
             dependencies
             submodules
