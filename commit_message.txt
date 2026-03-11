@@ -1,0 +1,3 @@
+[chore] Bump headers-more-nginx-module from 201e744 to +e76a51
+[chore] Bump ngx_brotli from a71f931 to a71f931
+[chore] Bump brotli from ed738e8 to +0ed426

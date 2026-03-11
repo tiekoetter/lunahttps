@@ -1,0 +1,5 @@
+ 201e7446b6aff930188d3d1863af4ad829fc6b21 luna/modules/headers-more-nginx-module (v0.39-1-g201e744)
+ a71f9312c2deb28875acc7bacfdd5695a111aa53 luna/modules/ngx_brotli (v1.0.0rc-9-ga71f931)
+ ed738e842d2fbdf2d6459e39267a633c4a9b2f5d luna/modules/ngx_brotli/deps/brotli (go/cbrotli/v1.1.0)
+ 445df24ef3781e488cee3dfe8a1e111997fc1dfe luna/modules/ngx_http_geoip2_module (3.4-4-g445df24)
+ e12e965ac1837ca709709f9a26f572a54d83430e luna/modules/ngx_http_substitutions_filter_module (v0.6.4-18-ge12e965)
