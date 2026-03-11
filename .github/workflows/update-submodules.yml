@@ -3,6 +3,7 @@ name: Update submodules
 on:
   workflow_dispatch:
   schedule:
+    # Every Monday at 06:15 UTC
     - cron: "15 6 * * 1"
 
 permissions:
@@ -20,79 +21,37 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Record current submodule commits
-        run: git submodule status --recursive > "$RUNNER_TEMP/before_submodules.txt"
-
-      - name: Update submodules
+      - name: Update submodules to latest remote commits
         run: |
           git submodule sync --recursive
           git submodule update --init --remote --recursive
 
-      - name: Record updated submodule commits
-        run: git submodule status --recursive > "$RUNNER_TEMP/after_submodules.txt"
-
-      - name: Detect changes and build PR metadata
-        id: meta
-        shell: bash
+      - name: Check for changes
+        id: changes
         run: |
-          BEFORE="$RUNNER_TEMP/before_submodules.txt"
-          AFTER="$RUNNER_TEMP/after_submodules.txt"
-          BODY_FILE="$RUNNER_TEMP/commit_body.txt"
-
-          if diff -q "$BEFORE" "$AFTER" >/dev/null; then
+          if git diff --quiet --submodule=diff --exit-code; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-
-          declare -a modules=()
-          : > "$BODY_FILE"
-
-          while read -r before_line; do
-            path=$(awk '{print $2}' <<< "$before_line")
-            old=$(awk '{print $1}' <<< "$before_line" | tr -d '+-U')
-            after_line=$(grep -F " $path" "$AFTER" || true)
-            new=$(awk '{print $1}' <<< "$after_line" | tr -d '+-U')
-
-            if [ -n "$new" ] && [ "$old" != "$new" ]; then
-              name=$(basename "$path")
-              modules+=("$name")
-              printf -- "- %s: %s -> %s\n" "$name" "${old:0:7}" "${new:0:7}" >> "$BODY_FILE"
-            fi
-          done < "$BEFORE"
-
-          if [ ${#modules[@]} -eq 0 ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          title="[chore] Bump $(IFS=', '; echo "${modules[*]}")"
-
-          {
-            echo "changed=true"
-            echo "title=$title"
-            echo "branch=ci/update-submodules"
-            echo "commit_body<<EOF"
-            cat "$BODY_FILE"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
 
       - name: Show updated submodule status
-        if: steps.meta.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         run: git submodule status --recursive
 
       - name: Create pull request
-        if: steps.meta.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
-          branch: ${{ steps.meta.outputs.branch }}
-          delete-branch: true
-          commit-message: |
-            ${{ steps.meta.outputs.title }}
-
-            ${{ steps.meta.outputs.commit_body }}
-          title: ${{ steps.meta.outputs.title }}
+          commit-message: "chore(submodules): update submodules"
+          title: "chore(submodules): update submodules"
           body: |
-            ${{ steps.meta.outputs.commit_body }}
+            Automated submodule update.
+
+            This PR updates the repository submodules to their latest upstream
+            remote commits as resolved by `git submodule update --remote --recursive`.
+          branch: ci/update-submodules
+          delete-branch: true
           labels: |
             dependencies
             submodules
