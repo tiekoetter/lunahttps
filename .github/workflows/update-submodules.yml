@@ -1,0 +1,80 @@
+name: Update submodules
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 6 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-submodules:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Record current submodule commits
+        run: |
+          git submodule status --recursive > before.txt
+
+      - name: Update submodules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --remote --recursive
+
+      - name: Record updated submodule commits
+        run: |
+          git submodule status --recursive > after.txt
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if diff -q before.txt after.txt >/dev/null; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate commit message
+        if: steps.changes.outputs.changed == 'true'
+        id: commitmsg
+        run: |
+          msg=""
+          while read -r before; do
+              path=$(echo "$before" | awk '{print $2}')
+              old=$(echo "$before" | awk '{print $1}' | tr -d '-')
+              new=$(grep " $path" after.txt | awk '{print $1}' | tr -d '-')
+
+              if [ "$old" != "$new" ]; then
+                  name=$(basename "$path")
+                  msg="$msg[chore] Bump $name from ${old:0:7} to ${new:0:7}\n"
+              fi
+          done < before.txt
+
+          printf "%b" "$msg" > commit_message.txt
+          echo "message<<EOF" >> "$GITHUB_OUTPUT"
+          cat commit_message.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create pull request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: ${{ steps.commitmsg.outputs.message }}
+          title: "Update submodules"
+          body: |
+            Automated submodule update.
+
+            Updated submodules to their latest upstream commits.
+          branch: ci/update-submodules
+          delete-branch: true
+          labels: |
+            dependencies
+            submodules
