@@ -15,6 +15,8 @@ YELLOW=$'\033[1;33m'
 BLUE=$'\033[1;34m'
 NC=$'\033[0m'
 
+__error_reported=0
+
 log() {
     printf '%b\n' "${BLUE}$*${NC}"
 }
@@ -31,7 +33,12 @@ die() {
 cleanup_on_error() {
     local exit_code=$1
     local line_no=$2
-    printf '%b\n' "${RED}OpenSSL downloader failed (exit code ${exit_code}) near line ${line_no}.${NC}" >&2
+
+    if [[ $__error_reported -eq 0 ]]; then
+        __error_reported=1
+        printf '%b\n' "${RED}OpenSSL downloader failed (exit code ${exit_code}) near line ${line_no}.${NC}" >&2
+    fi
+
     exit "${exit_code}"
 }
 
@@ -93,12 +100,13 @@ main() {
     log "Extracting ${FILENAME}..."
     tar -xzf "${FILENAME}"
 
-    EXTRACTED_DIR="$(
-        tar -tf "${FILENAME}" | awk -F/ 'NR==1 { print $1; exit }'
-    )"
+    shopt -s nullglob
+    extracted_dirs=( "${DL_DIR}"/openssl-* )
+    shopt -u nullglob
 
-    [[ -n "${EXTRACTED_DIR}" ]] || die "Could not determine extracted directory name."
-    [[ -d "${DL_DIR}/${EXTRACTED_DIR}" ]] || die "Extracted directory not found: ${DL_DIR}/${EXTRACTED_DIR}"
+    [[ ${#extracted_dirs[@]} -eq 1 ]] || die "Expected exactly one extracted OpenSSL directory, found ${#extracted_dirs[@]}."
+
+    EXTRACTED_DIR="$(basename -- "${extracted_dirs[0]}")"
 
     case "${EXTRACTED_DIR}" in
         openssl-*)
