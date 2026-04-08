@@ -51,8 +51,8 @@ require_file() {
     [[ -f "$1" ]] || die "Required file not found: $1"
 }
 
-require_dir() {
-    [[ -d "$1" ]] || die "Required directory not found: $1"
+ensure_dir() {
+    mkdir -p "$1"
 }
 
 print_banner() {
@@ -74,25 +74,32 @@ print_banner() {
 
 check_environment() {
     [[ "${EUID}" -eq 0 ]] || die "Please run this script as root."
+
     require_command wget
     require_command tar
     require_command make
     require_command systemctl
     require_command nproc
+    require_command bash
 
-    require_dir "${LUNA_DIR}"
-    require_dir "${NGINX_INTERNALS_DIR}"
-    require_dir "${OPENSSL_DIR}"
-    require_dir "${MODULES_DIR}"
+    ensure_dir "${LUNA_DIR}"
+    ensure_dir "${NGINX_INTERNALS_DIR}"
+    ensure_dir "${OPENSSL_DIR}"
+    ensure_dir "${MODULES_DIR}"
+    ensure_dir "${BUILD_ROOT}"
+
+    ensure_dir "${MODULES_DIR}/ngx_http_substitutions_filter_module"
+    ensure_dir "${MODULES_DIR}/headers-more-nginx-module"
+    ensure_dir "${MODULES_DIR}/ngx_http_geoip2_module"
+    ensure_dir "${MODULES_DIR}/ngx_brotli"
 
     require_file "${LUNA_DIR}/openssl-downloader.sh"
     require_file "${NGINX_INTERNALS_DIR}/ngx_http_header_filter_module.c"
     require_file "${NGINX_INTERNALS_DIR}/ngx_http_special_response.c"
-
-    require_dir "${MODULES_DIR}/ngx_http_substitutions_filter_module"
-    require_dir "${MODULES_DIR}/headers-more-nginx-module"
-    require_dir "${MODULES_DIR}/ngx_http_geoip2_module"
-    require_dir "${MODULES_DIR}/ngx_brotli"
+    require_file "${MODULES_DIR}/ngx_http_substitutions_filter_module/config"
+    require_file "${MODULES_DIR}/headers-more-nginx-module/config"
+    require_file "${MODULES_DIR}/ngx_http_geoip2_module/config"
+    require_file "${MODULES_DIR}/ngx_brotli/config"
 }
 
 download_openssl() {
