@@ -101,8 +101,15 @@ main() {
     tar -xzf "${FILENAME}"
 
     shopt -s nullglob
-    extracted_dirs=( "${DL_DIR}"/openssl-* )
+    entries=( "${DL_DIR}"/openssl-* )
     shopt -u nullglob
+
+    extracted_dirs=()
+    for entry in "${entries[@]}"; do
+        if [[ -d "${entry}" ]]; then
+            extracted_dirs+=( "${entry}" )
+        fi
+    done
 
     [[ ${#extracted_dirs[@]} -eq 1 ]] || die "Expected exactly one extracted OpenSSL directory, found ${#extracted_dirs[@]}."
 
