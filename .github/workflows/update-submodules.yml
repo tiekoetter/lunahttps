@@ -20,23 +20,27 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Update submodules to latest remote commits
+      - name: Update direct submodules to latest remote commits
         run: |
           git submodule sync --recursive
-          git submodule update --init --remote --recursive
+          git submodule update --init --remote
 
-      - name: Abort if any submodule is dirty internally
+      - name: Abort if any direct submodule is dirty internally
         run: |
-          if ! git submodule foreach --recursive 'git diff --quiet && git diff --cached --quiet && test -z "$(git ls-files --others --exclude-standard)"'; then
-            echo "A submodule has local modified or untracked files after update."
-            git submodule foreach --recursive 'echo "== $name =="; git status --short'
+          if ! git submodule foreach '
+            git diff --quiet &&
+            git diff --cached --quiet &&
+            test -z "$(git ls-files --others --exclude-standard)"
+          '; then
+            echo "A direct submodule has local modified or untracked files after update."
+            git submodule foreach 'echo "== $name =="; git status --short'
             exit 1
           fi
 
-      - name: Check whether parent repo recorded new submodule SHAs
+      - name: Check for recorded submodule SHA changes
         id: changes
         run: |
-          if git diff --quiet --exit-code -- . ':(exclude).gitmodules'; then
+          if git diff --quiet --exit-code; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -46,7 +50,7 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: |
           git diff --submodule=log
-          git submodule status --recursive
+          git submodule status
 
       - name: Create pull request
         if: steps.changes.outputs.changed == 'true'
@@ -58,7 +62,7 @@ jobs:
             Automated submodule update.
 
             This PR updates the repository submodules to their latest upstream
-            remote commits as resolved by `git submodule update --remote --recursive`.
+            remote commits.
           branch: ci/update-submodules
           delete-branch: true
           labels: |
