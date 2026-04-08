@@ -29,12 +29,13 @@ die() {
 }
 
 cleanup_on_error() {
-    local exit_code=$?
-    printf '%b\n' "${RED}OpenSSL downloader failed (exit code ${exit_code}) near line ${BASH_LINENO[0]:-unknown}.${NC}" >&2
+    local exit_code=$1
+    local line_no=$2
+    printf '%b\n' "${RED}OpenSSL downloader failed (exit code ${exit_code}) near line ${line_no}.${NC}" >&2
     exit "${exit_code}"
 }
 
-trap cleanup_on_error ERR
+trap 'cleanup_on_error $? $LINENO' ERR
 
 require_command() {
     command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
@@ -55,6 +56,7 @@ main() {
     require_command basename
     require_command mktemp
     require_command mv
+    require_command cp
 
     log "Preparing temporary download directory..."
     mkdir -p "${TMP_ROOT}"
@@ -68,9 +70,14 @@ main() {
 
     DOWNLOAD_URL="$(
         printf '%s\n' "${PAGE}" \
-            | awk '/\[LTS\]/,/<\/tr>/' \
-            | grep -oE 'https://github\.com/openssl/openssl/releases/download/[^"]+\.tar\.gz' \
-            | head -n1
+            | awk '
+                /\[LTS\]/,/<\/tr>/ {
+                    if (match($0, /https:\/\/github\.com\/openssl\/openssl\/releases\/download\/[^"]+\.tar\.gz/)) {
+                        print substr($0, RSTART, RLENGTH)
+                        exit
+                    }
+                }
+            '
     )"
 
     [[ -n "${DOWNLOAD_URL}" ]] || die "Failed to find the latest LTS OpenSSL tarball URL."
@@ -87,9 +94,7 @@ main() {
     tar -xzf "${FILENAME}"
 
     EXTRACTED_DIR="$(
-        tar -tf "${FILENAME}" \
-            | head -n1 \
-            | cut -d/ -f1
+        tar -tf "${FILENAME}" | awk -F/ 'NR==1 { print $1; exit }'
     )"
 
     [[ -n "${EXTRACTED_DIR}" ]] || die "Could not determine extracted directory name."
