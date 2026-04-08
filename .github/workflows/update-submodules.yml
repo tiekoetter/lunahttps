@@ -25,10 +25,31 @@ jobs:
           git submodule sync --recursive
           git submodule update --init --remote --recursive
 
-      - name: Show submodule status
-        run: git submodule status --recursive
+      - name: Abort if any submodule is dirty internally
+        run: |
+          if ! git submodule foreach --recursive 'git diff --quiet && git diff --cached --quiet && test -z "$(git ls-files --others --exclude-standard)"'; then
+            echo "A submodule has local modified or untracked files after update."
+            git submodule foreach --recursive 'echo "== $name =="; git status --short'
+            exit 1
+          fi
+
+      - name: Check whether parent repo recorded new submodule SHAs
+        id: changes
+        run: |
+          if git diff --quiet --exit-code -- . ':(exclude).gitmodules'; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Show updated submodule status
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git diff --submodule=log
+          git submodule status --recursive
 
       - name: Create pull request
+        if: steps.changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore(submodules): update submodules"
