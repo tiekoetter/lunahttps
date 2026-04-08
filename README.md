@@ -1,18 +1,18 @@
 # Luna-HTTP/S
 
-Custom-built NGINX version with enhanced performance, modern protocol support, and security-focused features.
+Custom-built NGINX with enhanced performance, modern protocol support, and security-focused features.
 
 ---
 
 ## ✨ Features
 
 - **Based on NGINX** `mainline`
-- **OpenSSL with TLS 1.3 + kTLS** for modern, post-quantum cryptography
-- **HTTP/3 / QUIC (experimental)** for reduced latency and faster connections
+- **OpenSSL with TLS 1.3 + kTLS** for modern transport security and improved performance
+- **HTTP/3 / QUIC** for reduced latency and faster connections
 - **Brotli compression** for reduced bandwidth usage and faster page loads
 - **ngx_http_geoip2_module** for GeoIP-based request handling
-- **headers-more-nginx-module** for more header control
-- **ngx_http_substitutions_filter_module** for RegEx filtering in headers
+- **headers-more-nginx-module** for advanced header control
+- **ngx_http_substitutions_filter_module** for RegEx-based response body filtering and substitution
 
 ---
 
@@ -31,7 +31,6 @@ This build is tailored for high-performance environments and is compiled with ad
 ## 🔧 Building from Source
 
 You can build this custom NGINX version using the provided build scripts in this repository.
-
 
 ### Build Steps
 
