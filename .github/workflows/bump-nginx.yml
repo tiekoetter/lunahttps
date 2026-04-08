@@ -12,6 +12,7 @@ permissions:
 jobs:
   bump-nginx:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -21,43 +22,80 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          LATEST="$(curl -fsSL https://nginx.org/en/CHANGES \
-            | grep -oE 'Changes with nginx [0-9]+\.[0-9]+\.[0-9]+' \
-            | awk '{print $4}' \
-            | awk -F. '{ if ($2 % 2 == 1) { print; exit } }')"
-          echo "latest=${LATEST}" >> "$GITHUB_OUTPUT"
+
+          CHANGES="$(curl -fsSL --retry 3 --retry-all-errors https://nginx.org/en/CHANGES)"
+
+          LATEST="$(
+            printf '%s\n' "$CHANGES" \
+              | grep -oE 'Changes with nginx [0-9]+\.[0-9]+\.[0-9]+' \
+              | awk '{print $4}' \
+              | awk -F. '$2 % 2 == 1 { print; exit }'
+          )"
+
+          if [ -z "$LATEST" ]; then
+            echo "Could not determine latest NGINX mainline version from CHANGES" >&2
+            exit 1
+          fi
+
+          echo "Detected latest mainline: $LATEST"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
 
       - name: Read current nginxver from build.sh
         id: current
         shell: bash
         run: |
           set -euo pipefail
-          CURR="$(grep -oE 'nginxver=[0-9]+\.[0-9]+\.[0-9]+' build.sh | head -n1 | cut -d= -f2)"
-          echo "current=${CURR}" >> "$GITHUB_OUTPUT"
+
+          test -f build.sh || { echo "build.sh not found" >&2; exit 1; }
+
+          CURR="$(
+            sed -nE 's/^[[:space:]]*nginxver[[:space:]]*=[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?/\1/p' build.sh \
+              | head -n1
+          )"
+
+          if [ -z "$CURR" ]; then
+            echo "Could not find nginxver in build.sh" >&2
+            exit 1
+          fi
+
+          echo "Detected current version: $CURR"
+          echo "current=$CURR" >> "$GITHUB_OUTPUT"
 
       - name: Update build.sh if needed
         if: steps.latest.outputs.latest != steps.current.outputs.current
         shell: bash
         run: |
           set -euo pipefail
-          sed -i "s/nginxver=${{ steps.current.outputs.current }}/nginxver=${{ steps.latest.outputs.latest }}/" build.sh
-          # Sanity-check the tarball exists
-          curl -fsI "https://nginx.org/download/nginx-${{ steps.latest.outputs.latest }}.tar.gz" > /dev/null
+
+          sed -i -E \
+            's/^([[:space:]]*nginxver[[:space:]]*=[[:space:]]*)"?[0-9]+\.[0-9]+\.[0-9]+"?$/\1${{ steps.latest.outputs.latest }}/' \
+            build.sh
+
+          grep -nE '^[[:space:]]*nginxver[[:space:]]*=' build.sh
+
+          curl -fsI --retry 3 --retry-all-errors \
+            "https://nginx.org/download/nginx-${{ steps.latest.outputs.latest }}.tar.gz" > /dev/null
+
+          git diff -- build.sh
           echo "Updated build.sh to ${{ steps.latest.outputs.latest }}"
 
-      - name: Create PR
+      - name: Create pull request
         if: steps.latest.outputs.latest != steps.current.outputs.current
         uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "[chore] Bump NGINX mainline from ${{ steps.current.outputs.current }} to ${{ steps.latest.outputs.latest }}"
-          title: "Bump NGINX mainline to ${{ steps.latest.outputs.latest }}"
+          title: "[chore] Bump NGINX mainline from ${{ steps.current.outputs.current }} to ${{ steps.latest.outputs.latest }}"
           body: |
-            Automated update: latest **mainline** detected from the official CHANGES log.
-            - Old: ${{ steps.current.outputs.current }}
-            - New: ${{ steps.latest.outputs.latest }}
+            Automated update for the latest NGINX mainline release.
 
-            Source: https://nginx.org/en/CHANGES
+            - Previous version: `${{ steps.current.outputs.current }}`
+            - New version: `${{ steps.latest.outputs.latest }}`
+
+            This updates the `nginxver` value in `build.sh` and verifies that the upstream tarball exists.
           branch: chore/bump-nginx-${{ steps.latest.outputs.latest }}
+          delete-branch: true
           labels: |
             dependencies
             nginx
+          add-paths: |
+            build.sh
