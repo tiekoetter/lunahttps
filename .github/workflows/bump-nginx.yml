@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Determine latest NGINX mainline from CHANGES
         id: latest
@@ -40,7 +42,7 @@ jobs:
           echo "Detected latest mainline: $LATEST"
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
 
-      - name: Read current nginxver from build.sh
+      - name: Read current NGINX_VERSION from build.sh
         id: current
         shell: bash
         run: |
@@ -49,12 +51,12 @@ jobs:
           test -f build.sh || { echo "build.sh not found" >&2; exit 1; }
 
           CURR="$(
-            sed -nE 's/^[[:space:]]*nginxver[[:space:]]*=[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?/\1/p' build.sh \
+            sed -nE 's/^[[:space:]]*readonly[[:space:]]+NGINX_VERSION[[:space:]]*=[[:space:]]*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' build.sh \
               | head -n1
           )"
 
           if [ -z "$CURR" ]; then
-            echo "Could not find nginxver in build.sh" >&2
+            echo "Could not find readonly NGINX_VERSION in build.sh" >&2
             exit 1
           fi
 
@@ -68,10 +70,10 @@ jobs:
           set -euo pipefail
 
           sed -i -E \
-            's/^([[:space:]]*nginxver[[:space:]]*=[[:space:]]*)"?[0-9]+\.[0-9]+\.[0-9]+"?$/\1${{ steps.latest.outputs.latest }}/' \
+            's|^([[:space:]]*readonly[[:space:]]+NGINX_VERSION[[:space:]]*=[[:space:]]*)"([0-9]+\.[0-9]+\.[0-9]+)"(.*)$|\1"${{ steps.latest.outputs.latest }}"\3|' \
             build.sh
 
-          grep -nE '^[[:space:]]*nginxver[[:space:]]*=' build.sh
+          grep -nE '^[[:space:]]*readonly[[:space:]]+NGINX_VERSION[[:space:]]*=' build.sh
 
           curl -fsI --retry 3 --retry-all-errors \
             "https://nginx.org/download/nginx-${{ steps.latest.outputs.latest }}.tar.gz" > /dev/null
@@ -91,7 +93,7 @@ jobs:
             - Previous version: `${{ steps.current.outputs.current }}`
             - New version: `${{ steps.latest.outputs.latest }}`
 
-            This updates the `nginxver` value in `build.sh` and verifies that the upstream tarball exists.
+            This updates `NGINX_VERSION` in `build.sh` and verifies that the upstream tarball exists.
           branch: chore/bump-nginx-${{ steps.latest.outputs.latest }}
           delete-branch: true
           labels: |
