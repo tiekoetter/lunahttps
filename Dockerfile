@@ -47,43 +47,7 @@ RUN mkdir -p /src/luna/build \
 
 WORKDIR /src/luna/build/nginx-${NGINX_VERSION}
 
-RUN set -eux; \
-    header_file="src/http/ngx_http_header_filter_module.c"; \
-    error_file="src/http/ngx_http_special_response.c"; \
-    \
-    grep -nE 'ngx_http_server_(string|full_string|build_string)|NGINX_VER|NGINX_VER_BUILD' "$header_file"; \
-    grep -nE 'NGINX_VER|NGINX_VER_BUILD|<hr><center>' "$error_file"; \
-    \
-    sed -i -E \
-      's|static u_char ngx_http_server_string\[\] = "Server: nginx" CRLF;|static u_char ngx_http_server_string[] = "Server: luna-http/s" CRLF;|' \
-      "$header_file"; \
-    \
-    sed -i -E \
-      's|static u_char ngx_http_server_full_string\[\] = "Server: " NGINX_VER CRLF;|static u_char ngx_http_server_full_string[] = "Server: luna-http/s+" NGINX_VERSION CRLF;|' \
-      "$header_file"; \
-    \
-    sed -i -E \
-      's|static u_char ngx_http_server_build_string\[\] = "Server: " NGINX_VER_BUILD CRLF;|static u_char ngx_http_server_build_string[] = "Server: luna-http/s+" NGINX_VERSION CRLF;|' \
-      "$header_file"; \
-    \
-    sed -i -E \
-      's|"<hr><center>nginx</center>" CRLF|"<hr><center>Luna-HTTP/S</center>" CRLF|' \
-      "$error_file"; \
-    \
-    sed -i -E \
-      's|"<hr><center>" NGINX_VER "</center>" CRLF|"<hr><center>Luna-HTTP/S+" NGINX_VERSION "</center>" CRLF|' \
-      "$error_file"; \
-    \
-    sed -i -E \
-      's|"<hr><center>" NGINX_VER_BUILD "</center>" CRLF|"<hr><center>Luna-HTTP/S+" NGINX_VERSION "</center>" CRLF|' \
-      "$error_file"; \
-    \
-    grep -q 'Server: Luna-HTTP/S' "$header_file"; \
-    grep -q 'Server: Luna-HTTP/S+' "$header_file"; \
-    grep -q '<hr><center>Luna-HTTP/S' "$error_file"; \
-    \
-    grep -nE 'Luna-HTTP/S|ngx_http_server_(string|full_string|build_string)' "$header_file"; \
-    grep -nE 'Luna-HTTP/S|<hr><center>' "$error_file"
+RUN /src/luna/docker-branding-patch.sh
 
 RUN ./configure \
     --prefix=/usr/share/nginx \
