@@ -47,7 +47,7 @@ RUN mkdir -p /src/luna/build \
 
 WORKDIR /src/luna/build/nginx-${NGINX_VERSION}
 
-RUN bash /src/luna/docker-branding-patch.sh
+RUN bash /src/luna/branding-patch.sh
 
 RUN ./configure \
     --prefix=/usr/share/nginx \
