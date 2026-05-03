@@ -1,0 +1,67 @@
+name: Bump Debian base image
+
+on:
+  schedule:
+    # Weekly, Monday 04:17 UTC
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-debian:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install distro-info
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y distro-info
+
+      - name: Check current Debian stable codename
+        id: debian
+        run: |
+          stable_codename="$(debian-distro-info --stable)"
+          current_codename="$(grep -E '^ARG DEBIAN_VERSION=' Dockerfile | head -n1 | cut -d= -f2)"
+
+          echo "stable_codename=${stable_codename}" >> "$GITHUB_OUTPUT"
+          echo "current_codename=${current_codename}" >> "$GITHUB_OUTPUT"
+
+          echo "Current Dockerfile Debian version: ${current_codename}"
+          echo "Current Debian stable codename: ${stable_codename}"
+
+      - name: Update Dockerfile
+        if: steps.debian.outputs.current_codename != steps.debian.outputs.stable_codename
+        run: |
+          sed -i -E \
+            "s/^ARG DEBIAN_VERSION=.*/ARG DEBIAN_VERSION=${{ steps.debian.outputs.stable_codename }}/" \
+            Dockerfile
+
+      - name: Create pull request
+        if: steps.debian.outputs.current_codename != steps.debian.outputs.stable_codename
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/bump-debian-${{ steps.debian.outputs.stable_codename }}
+          delete-branch: true
+          title: "chore(docker): bump Debian base to ${{ steps.debian.outputs.stable_codename }}"
+          commit-message: "chore(docker): bump Debian base to ${{ steps.debian.outputs.stable_codename }}"
+          body: |
+            Debian stable appears to have changed.
+
+            This PR updates the Docker base image codename:
+
+            ```diff
+            - ARG DEBIAN_VERSION=${{ steps.debian.outputs.current_codename }}
+            + ARG DEBIAN_VERSION=${{ steps.debian.outputs.stable_codename }}
+            ```
+
+            This should be reviewed carefully because a Debian major release bump can affect build dependencies, OpenSSL, NGINX modules, and runtime libraries.
+          labels: |
+            dependencies
+            docker
+            debian
