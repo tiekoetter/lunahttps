@@ -121,7 +121,7 @@ jobs:
               }
 
               server {
-                  listen 443 ssl;
+                  listen 443 ssl http2;
                   listen 443 quic reuseport;
 
                   server_name _;
@@ -168,10 +168,11 @@ jobs:
           grep -qi '^x-protocol: HTTP/2.0$' http2.txt
           grep -q 'Luna-HTTP/S' error-page.txt
 
-      - name: Test HTTP/3 branding if curl supports it
+      - name: Test HTTP/3 branding
         run: |
           if curl -V | grep -q HTTP3; then
             curl -kfsSI --http3-only https://127.0.0.1:18443/ | tee http3.txt
+
             grep -qi '^server: luna-http/s$' http3.txt
           else
             echo "Skipping HTTP/3 runtime test: curl has no HTTP3 support"
