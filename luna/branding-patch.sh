@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SERVER_OFF='luna-http/s'
-ERROR_OFF='Luna-HTTP/S'
-
 header_file="src/http/ngx_http_header_filter_module.c"
 error_file="src/http/ngx_http_special_response.c"
 h2_file="src/http/v2/ngx_http_v2_filter_module.c"
