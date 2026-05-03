@@ -159,12 +159,13 @@ jobs:
           curl -kfsSI --http1.1 https://127.0.0.1:18443/ | tee https1.txt
           curl -kfsSI --http2 https://127.0.0.1:18443/ | tee http2.txt
 
-          curl -kfsS https://127.0.0.1:18443/does-not-exist -o error-page.txt || true
+          curl -ksS https://127.0.0.1:18443/does-not-exist -o error-page.txt
           cat error-page.txt
 
           grep -qi '^server: luna-http/s$' http1.txt
           grep -qi '^server: luna-http/s$' https1.txt
           grep -qi '^server: luna-http/s$' http2.txt
+          grep -qi '^x-protocol: HTTP/2.0$' http2.txt
           grep -q 'Luna-HTTP/S' error-page.txt
 
       - name: Test HTTP/3 branding if curl supports it
