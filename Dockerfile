@@ -47,8 +47,32 @@ RUN mkdir -p /src/luna/build \
 
 WORKDIR /src/luna/build/nginx-${NGINX_VERSION}
 
-RUN cp /src/luna/nginx-internals/ngx_http_header_filter_module.c src/http/ \
- && cp /src/luna/nginx-internals/ngx_http_special_response.c src/http/
+RUN set -eux; \
+    header_file="src/http/ngx_http_header_filter_module.c"; \
+    error_file="src/http/ngx_http_special_response.c"; \
+    \
+    grep -q 'static u_char ngx_http_server_string\[\] = "Server: " NGINX_VER CRLF;' "$header_file"; \
+    grep -q 'static u_char ngx_http_server_full_string\[\] = "Server: " NGINX_VER_BUILD CRLF;' "$header_file"; \
+    grep -q '"<hr><center>" NGINX_VER "</center>" CRLF' "$error_file"; \
+    grep -q '"<hr><center>" NGINX_VER_BUILD "</center>" CRLF' "$error_file"; \
+    \
+    sed -i \
+      's|static u_char ngx_http_server_string\[\] = "Server: " NGINX_VER CRLF;|static u_char ngx_http_server_string[] = "Server: Luna-HTTP/S" CRLF;|' \
+      "$header_file"; \
+    sed -i \
+      's|static u_char ngx_http_server_full_string\[\] = "Server: " NGINX_VER_BUILD CRLF;|static u_char ngx_http_server_full_string[] = "Server: Luna-HTTP/S+" NGINX_VERSION CRLF;|' \
+      "$header_file"; \
+    sed -i \
+      's|"<hr><center>" NGINX_VER "</center>" CRLF|"<hr><center>Luna-HTTP/S</center>" CRLF|' \
+      "$error_file"; \
+    sed -i \
+      's|"<hr><center>" NGINX_VER_BUILD "</center>" CRLF|"<hr><center>Luna-HTTP/S+" NGINX_VERSION "</center>" CRLF|' \
+      "$error_file"; \
+    \
+    grep -q 'Server: Luna-HTTP/S' "$header_file"; \
+    grep -q 'Server: Luna-HTTP/S+' "$header_file"; \
+    grep -q '<hr><center>Luna-HTTP/S</center>' "$error_file"; \
+    grep -q '<hr><center>Luna-HTTP/S+' "$error_file"
 
 RUN ./configure \
     --prefix=/usr/share/nginx \
