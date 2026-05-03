@@ -1,0 +1,188 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: |
+          shellcheck build.sh
+          shellcheck luna/openssl-downloader.sh
+          shellcheck luna/apply-branding-patch.sh
+
+  docker-build-test:
+    name: Docker build and runtime test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Verify submodules
+        run: |
+          git submodule status --recursive
+
+          test -f luna/modules/ngx_http_substitutions_filter_module/config
+          test -f luna/modules/headers-more-nginx-module/config
+          test -f luna/modules/ngx_http_geoip2_module/config
+          test -f luna/modules/ngx_brotli/config
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CI image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: lunahttps:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check NGINX binary and modules
+        run: |
+          docker run --rm lunahttps:ci nginx -t
+          docker run --rm lunahttps:ci nginx -V 2>&1 | tee nginx-version.txt
+
+          grep -q -- '--with-http_ssl_module' nginx-version.txt
+          grep -q -- '--with-http_v2_module' nginx-version.txt
+          grep -q -- '--with-http_v3_module' nginx-version.txt
+          grep -q -- '--with-stream' nginx-version.txt
+          grep -q -- 'OpenSSL 3.5' nginx-version.txt
+
+      - name: Prepare runtime test config
+        run: |
+          mkdir -p ci-test/certs ci-test/html
+
+          openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
+            -keyout ci-test/certs/selfsigned.key \
+            -out ci-test/certs/selfsigned.crt \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+
+          cat > ci-test/html/index.html <<'EOF'
+          <!doctype html>
+          <html>
+          <body>Luna CI test</body>
+          </html>
+          EOF
+
+          cat > ci-test/nginx.conf <<'EOF'
+          worker_processes auto;
+
+          events {
+              worker_connections 1024;
+          }
+
+          http {
+              include       /etc/nginx/mime.types;
+              default_type  application/octet-stream;
+
+              server_tokens off;
+
+              server {
+                  listen 80;
+                  server_name _;
+                  root /usr/share/nginx/html;
+                  index index.html;
+              }
+
+              server {
+                  listen 443 ssl;
+                  listen 443 quic reuseport;
+
+                  server_name _;
+
+                  ssl_certificate     /etc/nginx/certs/selfsigned.crt;
+                  ssl_certificate_key /etc/nginx/certs/selfsigned.key;
+
+                  ssl_protocols TLSv1.3;
+
+                  add_header Alt-Svc 'h3=":18443"; ma=86400' always;
+                  add_header X-Protocol $server_protocol always;
+
+                  root /usr/share/nginx/html;
+                  index index.html;
+              }
+          }
+          EOF
+
+      - name: Start CI container
+        run: |
+          docker run -d --name luna-ci \
+            -p 18080:80/tcp \
+            -p 18443:443/tcp \
+            -p 18443:443/udp \
+            -v "$PWD/ci-test/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/ci-test/certs:/etc/nginx/certs:ro" \
+            -v "$PWD/ci-test/html:/usr/share/nginx/html:ro" \
+            lunahttps:ci
+
+          sleep 3
+
+      - name: Test HTTP/1, HTTP/2 and error-page branding
+        run: |
+          curl -fsSI --http1.1 http://127.0.0.1:18080/ | tee http1.txt
+          curl -kfsSI --http1.1 https://127.0.0.1:18443/ | tee https1.txt
+          curl -kfsSI --http2 https://127.0.0.1:18443/ | tee http2.txt
+
+          curl -kfsS https://127.0.0.1:18443/does-not-exist -o error-page.txt || true
+          cat error-page.txt
+
+          grep -qi '^server: luna-http/s$' http1.txt
+          grep -qi '^server: luna-http/s$' https1.txt
+          grep -qi '^server: luna-http/s$' http2.txt
+          grep -q 'Luna-HTTP/S' error-page.txt
+
+      - name: Test HTTP/3 branding if curl supports it
+        run: |
+          if curl -V | grep -q HTTP3; then
+            curl -kfsSI --http3-only https://127.0.0.1:18443/ | tee http3.txt
+            grep -qi '^server: luna-http/s$' http3.txt
+          else
+            echo "Skipping HTTP/3 runtime test: curl has no HTTP3 support"
+          fi
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          docker logs luna-ci || true
+          docker exec luna-ci cat /var/log/nginx/error.log || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f luna-ci || true
