@@ -78,22 +78,24 @@ patch_http2() {
   fi
 
   perl -0pi -e '
-    s|    static const u_char nginx\[5\] = \{ 0x84, 0xaa, 0x63, 0x55, 0xe7 \};|    static size_t luna_len = ngx_http_v2_literal_size("luna-http/s");\n    static u_char luna[ngx_http_v2_literal_size("luna-http/s")];|s;
+    s|static const u_char nginx\[5\] = \{ 0x84, 0xaa, 0x63, 0x55, 0xe7 \};|static size_t luna_len = ngx_http_v2_literal_size("luna-http/s");\n    static u_char luna[ngx_http_v2_literal_size("luna-http/s")];|s;
 
-    s|    static size_t nginx_ver_len = ngx_http_v2_literal_size\(NGINX_VER\);\n    static u_char nginx_ver\[ngx_http_v2_literal_size\(NGINX_VER\)\];\n\n    static size_t nginx_ver_build_len =\n        ngx_http_v2_literal_size\(NGINX_VER_BUILD\);\n    static u_char nginx_ver_build\[ngx_http_v2_literal_size\(NGINX_VER_BUILD\)\];|    static size_t nginx_ver_len =\n        ngx_http_v2_literal_size("luna-http/s+" NGINX_VERSION);\n    static u_char nginx_ver[\n        ngx_http_v2_literal_size("luna-http/s+" NGINX_VERSION)];\n\n    static size_t nginx_ver_build_len =\n        ngx_http_v2_literal_size("luna-http/s+" NGINX_VERSION);\n    static u_char nginx_ver_build[\n        ngx_http_v2_literal_size("luna-http/s+" NGINX_VERSION)];|s;
+    s|static size_t nginx_ver_len\s*=\s*ngx_http_v2_literal_size\(NGINX_VER\);\s*static u_char nginx_ver\[ngx_http_v2_literal_size\(NGINX_VER\)\];|static size_t nginx_ver_len =\n        ngx_http_v2_literal_size("luna-http/s+" NGINX_VERSION);\n    static u_char nginx_ver[\n        ngx_http_v2_literal_size("luna-http/s+" NGINX_VERSION)];|s;
 
-    s|        \} else \{\n            len \+= 1 \+ sizeof\(nginx\);\n        \}|        } else {\n            len += 1 + luna_len;\n        }|s;
+    s|static size_t nginx_ver_build_len\s*=\s*ngx_http_v2_literal_size\(NGINX_VER_BUILD\);\s*static u_char nginx_ver_build\[ngx_http_v2_literal_size\(NGINX_VER_BUILD\)\];|static size_t nginx_ver_build_len =\n        ngx_http_v2_literal_size("luna-http/s+" NGINX_VERSION);\n    static u_char nginx_ver_build[\n        ngx_http_v2_literal_size("luna-http/s+" NGINX_VERSION)];|s;
 
-    s|"http2 output header: \\\\"server: nginx\\\\""|"http2 output header: \\\\"server: luna-http/s\\\\""|g;
+    s|\} else \{\s*len \+= 1 \+ sizeof\(nginx\);\s*\}|} else {\n            len += 1 + luna_len;\n        }|s;
 
-    s|p = ngx_http_v2_write_value\(nginx_ver, \(u_char \*\) NGINX_VER,\n                                           sizeof\(NGINX_VER\) - 1, tmp\);|p = ngx_http_v2_write_value(nginx_ver,\n                                           (u_char *) "luna-http/s+" NGINX_VERSION,\n                                           sizeof("luna-http/s+" NGINX_VERSION) - 1,\n                                           tmp);|s;
+    s|"http2 output header: \\"server: nginx\\""|"http2 output header: \\"server: luna-http/s\\""|g;
 
-    s|p = ngx_http_v2_write_value\(nginx_ver_build,\n                                           \(u_char \*\) NGINX_VER_BUILD,\n                                           sizeof\(NGINX_VER_BUILD\) - 1, tmp\);|p = ngx_http_v2_write_value(nginx_ver_build,\n                                           (u_char *) "luna-http/s+" NGINX_VERSION,\n                                           sizeof("luna-http/s+" NGINX_VERSION) - 1,\n                                           tmp);|s;
+    s|p = ngx_http_v2_write_value\(nginx_ver,\s*\(u_char \*\) NGINX_VER,\s*sizeof\(NGINX_VER\) - 1, tmp\);|p = ngx_http_v2_write_value(nginx_ver,\n                                           (u_char *) "luna-http/s+" NGINX_VERSION,\n                                           sizeof("luna-http/s+" NGINX_VERSION) - 1,\n                                           tmp);|s;
 
-    s|        \} else \{\n            pos = ngx_cpymem\(pos, nginx, sizeof\(nginx\)\);\n        \}|        } else {\n            if (luna[0] == '\''\\0'\'') {\n                p = ngx_http_v2_write_value(luna, (u_char *) "luna-http/s",\n                                            sizeof("luna-http/s") - 1, tmp);\n                luna_len = p - luna;\n            }\n\n            pos = ngx_cpymem(pos, luna, luna_len);\n        }|s;
+    s|p = ngx_http_v2_write_value\(nginx_ver_build,\s*\(u_char \*\) NGINX_VER_BUILD,\s*sizeof\(NGINX_VER_BUILD\) - 1, tmp\);|p = ngx_http_v2_write_value(nginx_ver_build,\n                                           (u_char *) "luna-http/s+" NGINX_VERSION,\n                                           sizeof("luna-http/s+" NGINX_VERSION) - 1,\n                                           tmp);|s;
+
+    s|\} else \{\s*pos = ngx_cpymem\(pos, nginx, sizeof\(nginx\)\);\s*\}|} else {\n            if (luna[0] == '\''\\0'\'') {\n                p = ngx_http_v2_write_value(luna, (u_char *) "luna-http/s",\n                                            sizeof("luna-http/s") - 1, tmp);\n                luna_len = p - luna;\n            }\n\n            pos = ngx_cpymem(pos, luna, luna_len);\n        }|s;
   ' "$h2_file"
 
-  if grep -qE 'sizeof\(nginx\)|server: nginx' "$h2_file"; then
+  if grep -qE 'sizeof\(nginx\)|server: nginx|NGINX_VER|NGINX_VER_BUILD' "$h2_file"; then
     echo "HTTP/2 branding patch incomplete" >&2
     grep -nE 'sizeof\(nginx\)|server: nginx|NGINX_VER|NGINX_VER_BUILD' "$h2_file" || true
     exit 1
