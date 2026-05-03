@@ -43,7 +43,7 @@ jobs:
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
 
       - name: Read current NGINX_VERSION from build.sh
-        id: current
+        id: current_build
         shell: bash
         run: |
           set -euo pipefail
@@ -60,11 +60,34 @@ jobs:
             exit 1
           fi
 
-          echo "Detected current version: $CURR"
+          echo "Detected build.sh version: $CURR"
           echo "current=$CURR" >> "$GITHUB_OUTPUT"
 
-      - name: Update build.sh if needed
-        if: steps.latest.outputs.latest != steps.current.outputs.current
+      - name: Read current NGINX_VERSION from Dockerfile
+        id: current_dockerfile
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f Dockerfile || { echo "Dockerfile not found" >&2; exit 1; }
+
+          CURR="$(
+            sed -nE 's/^[[:space:]]*ARG[[:space:]]+NGINX_VERSION=([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' Dockerfile \
+              | head -n1
+          )"
+
+          if [ -z "$CURR" ]; then
+            echo "Could not find ARG NGINX_VERSION in Dockerfile" >&2
+            exit 1
+          fi
+
+          echo "Detected Dockerfile version: $CURR"
+          echo "current=$CURR" >> "$GITHUB_OUTPUT"
+
+      - name: Update build.sh and Dockerfile if needed
+        if: |
+          steps.latest.outputs.latest != steps.current_build.outputs.current ||
+          steps.latest.outputs.latest != steps.current_dockerfile.outputs.current
         shell: bash
         run: |
           set -euo pipefail
@@ -73,31 +96,46 @@ jobs:
             's|^([[:space:]]*readonly[[:space:]]+NGINX_VERSION[[:space:]]*=[[:space:]]*)"([0-9]+\.[0-9]+\.[0-9]+)"(.*)$|\1"${{ steps.latest.outputs.latest }}"\3|' \
             build.sh
 
+          sed -i -E \
+            's|^([[:space:]]*ARG[[:space:]]+NGINX_VERSION=)([0-9]+\.[0-9]+\.[0-9]+)(.*)$|\1${{ steps.latest.outputs.latest }}\3|' \
+            Dockerfile
+
           grep -nE '^[[:space:]]*readonly[[:space:]]+NGINX_VERSION[[:space:]]*=' build.sh
+          grep -nE '^[[:space:]]*ARG[[:space:]]+NGINX_VERSION=' Dockerfile
 
           curl -fsI --retry 3 --retry-all-errors \
             "https://nginx.org/download/nginx-${{ steps.latest.outputs.latest }}.tar.gz" > /dev/null
 
-          git diff -- build.sh
-          echo "Updated build.sh to ${{ steps.latest.outputs.latest }}"
+          git diff -- build.sh Dockerfile
+          echo "Updated build.sh and Dockerfile to ${{ steps.latest.outputs.latest }}"
 
       - name: Create pull request
-        if: steps.latest.outputs.latest != steps.current.outputs.current
+        if: |
+          steps.latest.outputs.latest != steps.current_build.outputs.current ||
+          steps.latest.outputs.latest != steps.current_dockerfile.outputs.current
         uses: peter-evans/create-pull-request@v8
         with:
-          commit-message: "[chore] Bump NGINX mainline from ${{ steps.current.outputs.current }} to ${{ steps.latest.outputs.latest }}"
-          title: "[chore] Bump NGINX mainline from ${{ steps.current.outputs.current }} to ${{ steps.latest.outputs.latest }}"
+          commit-message: "[chore] Bump NGINX mainline from ${{ steps.current_build.outputs.current }} to ${{ steps.latest.outputs.latest }}"
+          title: "[chore] Bump NGINX mainline from ${{ steps.current_build.outputs.current }} to ${{ steps.latest.outputs.latest }}"
           body: |
             Automated update for the latest NGINX mainline release.
 
-            - Previous version: `${{ steps.current.outputs.current }}`
+            - Previous `build.sh` version: `${{ steps.current_build.outputs.current }}`
+            - Previous `Dockerfile` version: `${{ steps.current_dockerfile.outputs.current }}`
             - New version: `${{ steps.latest.outputs.latest }}`
 
-            This updates `NGINX_VERSION` in `build.sh` and verifies that the upstream tarball exists.
+            This updates:
+
+            - `NGINX_VERSION` in `build.sh`
+            - `ARG NGINX_VERSION` in `Dockerfile`
+
+            The workflow also verifies that the upstream NGINX tarball exists.
           branch: chore/bump-nginx-${{ steps.latest.outputs.latest }}
           delete-branch: true
           labels: |
             dependencies
             nginx
+            docker
           add-paths: |
             build.sh
+            Dockerfile
