@@ -7,6 +7,7 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ROOT="${SCRIPT_DIR}"
 readonly LUNA_DIR="${PROJECT_ROOT}/luna"
 readonly NGINX_INTERNALS_DIR="${LUNA_DIR}/nginx-internals"
+readonly BRANDING_PATCH_SCRIPT="${LUNA_DIR}/branding-patch.sh"
 readonly OPENSSL_DIR="${LUNA_DIR}/openssl-lts"
 readonly MODULES_DIR="${LUNA_DIR}/modules"
 readonly BUILD_ROOT="${LUNA_DIR}/build"
@@ -81,6 +82,7 @@ check_environment() {
     require_command systemctl
     require_command nproc
     require_command bash
+    require_command perl
 
     ensure_dir "${LUNA_DIR}"
     ensure_dir "${NGINX_INTERNALS_DIR}"
@@ -94,6 +96,7 @@ check_environment() {
     ensure_dir "${MODULES_DIR}/ngx_brotli"
 
     require_file "${LUNA_DIR}/openssl-downloader.sh"
+    require_file "${BRANDING_PATCH_SCRIPT}"
     require_file "${NGINX_INTERNALS_DIR}/ngx_http_header_filter_module.c"
     require_file "${NGINX_INTERNALS_DIR}/ngx_http_special_response.c"
     require_file "${MODULES_DIR}/ngx_http_substitutions_filter_module/config"
@@ -125,8 +128,19 @@ download_nginx() {
 patch_nginx() {
     log "Applying Luna-HTTP/S patches..."
     cd "${SRC_DIR}"
+
     cp "${NGINX_INTERNALS_DIR}/ngx_http_header_filter_module.c" "src/http/"
     cp "${NGINX_INTERNALS_DIR}/ngx_http_special_response.c" "src/http/"
+
+    log "Applying Luna-HTTP/S branding patch..."
+    bash "${BRANDING_PATCH_SCRIPT}"
+
+    grep -RIn 'luna-http/s\|Luna-HTTP/S' \
+        "src/http/ngx_http_header_filter_module.c" \
+        "src/http/ngx_http_special_response.c" \
+        "src/http/v2/ngx_http_v2_filter_module.c" \
+        "src/http/v3/ngx_http_v3_filter_module.c" >/dev/null || \
+        die "Luna branding patch did not apply correctly."
 }
 
 configure_nginx() {
