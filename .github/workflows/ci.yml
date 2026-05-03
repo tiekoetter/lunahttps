@@ -36,7 +36,7 @@ jobs:
         run: |
           shellcheck build.sh
           shellcheck luna/openssl-downloader.sh
-          shellcheck luna/apply-branding-patch.sh
+          shellcheck luna/branding-patch.sh
 
   docker-build-test:
     name: Docker build and runtime test
