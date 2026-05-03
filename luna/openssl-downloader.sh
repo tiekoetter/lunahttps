@@ -2,7 +2,8 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 readonly WORK_DIR="${SCRIPT_DIR}"
 readonly OPENSSL_DIR="${WORK_DIR}/openssl-lts"
 readonly TMP_ROOT="${WORK_DIR}/.tmp"
