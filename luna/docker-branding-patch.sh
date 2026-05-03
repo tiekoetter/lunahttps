@@ -95,9 +95,15 @@ patch_http2() {
     s|\} else \{\s*pos = ngx_cpymem\(pos, nginx, sizeof\(nginx\)\);\s*\}|} else {\n            if (luna[0] == '\''\\0'\'') {\n                p = ngx_http_v2_write_value(luna, (u_char *) "luna-http/s",\n                                            sizeof("luna-http/s") - 1, tmp);\n                luna_len = p - luna;\n            }\n\n            pos = ngx_cpymem(pos, luna, luna_len);\n        }|s;
   ' "$h2_file"
 
-  if grep -qE 'sizeof\(nginx\)|server: nginx|NGINX_VER|NGINX_VER_BUILD' "$h2_file"; then
+  perl -0pi -e '
+    s|ngx_log_debug1\(\s*NGX_LOG_DEBUG_HTTP,\s*fc->log,\s*0,\s*"http2 output header: \\"server: %s\\"",\s*NGINX_VER\s*\);|ngx_log_debug0(NGX_LOG_DEBUG_HTTP, fc->log, 0,\n                           "http2 output header: \\"server: luna-http/s+\\"");|s;
+
+    s|ngx_log_debug1\(\s*NGX_LOG_DEBUG_HTTP,\s*fc->log,\s*0,\s*"http2 output header: \\"server: %s\\"",\s*NGINX_VER_BUILD\s*\);|ngx_log_debug0(NGX_LOG_DEBUG_HTTP, fc->log, 0,\n                           "http2 output header: \\"server: luna-http/s+\\"");|s;
+  ' "$h2_file"
+
+  if grep -qE 'sizeof\(nginx\)|server: nginx|\(u_char \*\) NGINX_VER|\(u_char \*\) NGINX_VER_BUILD|ngx_http_v2_literal_size\(NGINX_VER|sizeof\(NGINX_VER' "$h2_file"; then
     echo "HTTP/2 branding patch incomplete" >&2
-    grep -nE 'sizeof\(nginx\)|server: nginx|NGINX_VER|NGINX_VER_BUILD' "$h2_file" || true
+    grep -nE 'sizeof\(nginx\)|server: nginx|\(u_char \*\) NGINX_VER|\(u_char \*\) NGINX_VER_BUILD|ngx_http_v2_literal_size\(NGINX_VER|sizeof\(NGINX_VER' "$h2_file" || true
     exit 1
   fi
 
