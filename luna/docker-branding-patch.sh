@@ -119,18 +119,26 @@ patch_http3() {
     return
   fi
 
-  # HTTP/3/QPACK source layout changes more often than HTTP/1.
-  # These replacements intentionally fail below if nginx branding remains.
+  # Patch only exact HTTP/3/QPACK server header values.
+  # Important: do NOT globally replace NGINX_VER, because it also matches
+  # the prefix of NGINX_VERSION and creates NGINX_VERSIONSION.
   perl -0pi -e '
     s|"server: nginx"|"server: luna-http/s"|g;
     s|"nginx"|"luna-http/s"|g;
-    s|NGINX_VER_BUILD|"luna-http/s+" NGINX_VERSION|g;
-    s|NGINX_VER|"luna-http/s+" NGINX_VERSION|g;
+
+    s|\(u_char \*\) NGINX_VER_BUILD|(u_char *) "luna-http/s+" NGINX_VERSION|g;
+    s|sizeof\(NGINX_VER_BUILD\) - 1|sizeof("luna-http/s+" NGINX_VERSION) - 1|g;
+
+    s|\(u_char \*\) NGINX_VER|(u_char *) "luna-http/s+" NGINX_VERSION|g;
+    s|sizeof\(NGINX_VER\) - 1|sizeof("luna-http/s+" NGINX_VERSION) - 1|g;
+
+    s|= NGINX_VER_BUILD;|= "luna-http/s+" NGINX_VERSION;|g;
+    s|= NGINX_VER;|= "luna-http/s+" NGINX_VERSION;|g;
   ' "$h3_file"
 
-  if grep -qE 'server: nginx|"nginx"|NGINX_VER|NGINX_VER_BUILD' "$h3_file"; then
+  if grep -qE 'server: nginx|"nginx"|NGINX_VERSIONSION|\(u_char \*\) NGINX_VER|\(u_char \*\) NGINX_VER_BUILD|sizeof\(NGINX_VER\)|sizeof\(NGINX_VER_BUILD\)|= NGINX_VER|= NGINX_VER_BUILD' "$h3_file"; then
     echo "HTTP/3 branding patch incomplete" >&2
-    grep -nE 'server: nginx|"nginx"|NGINX_VER|NGINX_VER_BUILD' "$h3_file" || true
+    grep -nE 'server: nginx|"nginx"|NGINX_VERSIONSION|\(u_char \*\) NGINX_VER|\(u_char \*\) NGINX_VER_BUILD|sizeof\(NGINX_VER\)|sizeof\(NGINX_VER_BUILD\)|= NGINX_VER|= NGINX_VER_BUILD' "$h3_file" || true
     exit 1
   fi
 
