@@ -155,9 +155,9 @@ jobs:
 
       - name: Test HTTP/1, HTTP/2 and error-page branding
         run: |
-          curl -fsSI --http1.1 http://127.0.0.1:18080/ | tee http1.txt
-          curl -kfsSI --http1.1 https://127.0.0.1:18443/ | tee https1.txt
-          curl -kfsSI --http2 https://127.0.0.1:18443/ | tee http2.txt
+          curl -fsSI --http1.1 http://127.0.0.1:18080/ | tr -d '\r' | tee http1.txt
+          curl -kfsSI --http1.1 https://127.0.0.1:18443/ | tr -d '\r' | tee https1.txt
+          curl -kfsSI --http2 https://127.0.0.1:18443/ | tr -d '\r' | tee http2.txt
 
           curl -ksS https://127.0.0.1:18443/does-not-exist -o error-page.txt
           cat error-page.txt
@@ -171,8 +171,7 @@ jobs:
       - name: Test HTTP/3 branding
         run: |
           if curl -V | grep -q HTTP3; then
-            curl -kfsSI --http3-only https://127.0.0.1:18443/ | tee http3.txt
-
+            curl -kfsSI --http3-only https://127.0.0.1:18443/ | tr -d '\r' | tee http3.txt
             grep -qi '^server: luna-http/s$' http3.txt
           else
             echo "Skipping HTTP/3 runtime test: curl has no HTTP3 support"
