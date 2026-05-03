@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 ARG DEBIAN_VERSION=trixie
-ARG NGINX_VERSION=1.29.7
+ARG NGINX_VERSION=1.29.8
 
 FROM debian:${DEBIAN_VERSION} AS builder
 
