@@ -55,15 +55,15 @@ RUN set -eux; \
     grep -nE 'NGINX_VER|NGINX_VER_BUILD|<hr><center>' "$error_file"; \
     \
     sed -i -E \
-      's|static u_char ngx_http_server_string\[\] = "Server: nginx" CRLF;|static u_char ngx_http_server_string[] = "Server: Luna-HTTP/S" CRLF;|' \
+      's|static u_char ngx_http_server_string\[\] = "Server: nginx" CRLF;|static u_char ngx_http_server_string[] = "Server: luna-http/s" CRLF;|' \
       "$header_file"; \
     \
     sed -i -E \
-      's|static u_char ngx_http_server_full_string\[\] = "Server: " NGINX_VER CRLF;|static u_char ngx_http_server_full_string[] = "Server: Luna-HTTP/S+" NGINX_VERSION CRLF;|' \
+      's|static u_char ngx_http_server_full_string\[\] = "Server: " NGINX_VER CRLF;|static u_char ngx_http_server_full_string[] = "Server: luna-http/s+" NGINX_VERSION CRLF;|' \
       "$header_file"; \
     \
     sed -i -E \
-      's|static u_char ngx_http_server_build_string\[\] = "Server: " NGINX_VER_BUILD CRLF;|static u_char ngx_http_server_build_string[] = "Server: Luna-HTTP/S+" NGINX_VERSION CRLF;|' \
+      's|static u_char ngx_http_server_build_string\[\] = "Server: " NGINX_VER_BUILD CRLF;|static u_char ngx_http_server_build_string[] = "Server: luna-http/s+" NGINX_VERSION CRLF;|' \
       "$header_file"; \
     \
     sed -i -E \
