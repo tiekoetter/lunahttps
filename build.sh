@@ -127,13 +127,8 @@ download_nginx() {
 }
 
 patch_nginx() {
-    log "Applying Luna-HTTP/S patches..."
-    cd "${SRC_DIR}"
-
-    cp "${NGINX_INTERNALS_DIR}/ngx_http_header_filter_module.c" "src/http/"
-    cp "${NGINX_INTERNALS_DIR}/ngx_http_special_response.c" "src/http/"
-
     log "Applying Luna-HTTP/S branding patch..."
+    cd "${SRC_DIR}"
     bash "${BRANDING_PATCH_SCRIPT}"
 
     grep -RIn 'luna-http/s\|Luna-HTTP/S' \
