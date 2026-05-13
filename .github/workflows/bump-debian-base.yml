@@ -2,8 +2,7 @@ name: Bump Debian base image
 
 on:
   schedule:
-    # Weekly, Monday 04:17 UTC
-    - cron: "0 1 * * *"
+    - cron: "0 1 * * 1"
   workflow_dispatch:
 
 permissions:
