@@ -41,6 +41,7 @@ jobs:
   docker-build-test:
     name: Docker build and runtime test
     runs-on: ubuntu-latest
+    needs: shellcheck
 
     steps:
       - name: Checkout
