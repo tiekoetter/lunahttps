@@ -12,9 +12,6 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
-  schedule:
-    # Weekly rebuild to pick up Debian package/security updates
-    - cron: "0 3 * * 1"
 
 permissions:
   contents: read
@@ -29,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
 
     # For workflow_run, only publish when CI succeeded.
-    # Tag pushes, manual runs, and scheduled rebuilds run directly.
+    # Tag pushes and manual runs run directly.
     if: >
       github.event_name != 'workflow_run' ||
       github.event.workflow_run.conclusion == 'success'
@@ -59,7 +56,7 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_run' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') }}
             type=ref,event=tag
             type=sha,prefix=sha-
 

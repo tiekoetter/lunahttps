@@ -247,7 +247,7 @@ CI validates:
 - generated error page branding,
 - HTTP/3 branding when the GitHub Actions runner curl supports HTTP/3.
 
-Docker image publishing runs after CI succeeds on the main branch, and can also be started manually or by scheduled rebuilds. Scheduled rebuilds are used to pick up Debian package/security updates.
+Docker image publishing runs after CI succeeds on the main branch, and can also be started manually.
 
 Additional maintenance workflows may open PRs for:
 
