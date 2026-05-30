@@ -59,6 +59,8 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') }}
             type=ref,event=tag
             type=sha,prefix=sha-
+          labels: |
+            org.opencontainers.image.url=https://lunahttps.tiekoetter.net
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
