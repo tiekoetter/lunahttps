@@ -65,6 +65,7 @@ load_openssl_pin() {
     require_file "${OPENSSL_VERSION_FILE}"
 
     # shellcheck source=./luna/openssl-version.env
+    # shellcheck disable=SC1091
     . "${OPENSSL_VERSION_FILE}"
 
     [[ "${OPENSSL_SERIES:-}" =~ ^[0-9]+\.[0-9]+$ ]] || \
