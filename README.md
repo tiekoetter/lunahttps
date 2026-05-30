@@ -44,6 +44,7 @@ OpenSSL is downloaded and prepared by:
 ```text
 luna/openssl-downloader.sh
 ```
+
 ## 🔐 Post-Quantum Cryptography
 
 Luna-HTTP/S is built with OpenSSL 3.5.x, which includes support for post-quantum cryptography algorithms such as ML-KEM, ML-DSA, and SLH-DSA.
@@ -157,6 +158,8 @@ If the repository was cloned without submodules, initialize them first:
 git submodule update --init --recursive
 ```
 
+Docker builds also expect the submodules to be initialized in the build context.
+
 The build script will:
 
 1. download and prepare OpenSSL,
@@ -244,7 +247,7 @@ CI validates:
 - generated error page branding,
 - HTTP/3 branding when the GitHub Actions runner curl supports HTTP/3.
 
-Docker image publishing runs only after CI succeeds on the main branch. Scheduled rebuilds are used to pick up Debian package/security updates.
+Docker image publishing runs after CI succeeds on the main branch, and can also be started manually or by scheduled rebuilds. Scheduled rebuilds are used to pick up Debian package/security updates.
 
 Additional maintenance workflows may open PRs for:
 
