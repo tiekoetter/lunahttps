@@ -61,8 +61,7 @@ jobs:
           body: |
             Automated submodule update.
 
-            This PR updates the repository submodules to their latest upstream
-            remote commits.
+            This PR updates the repository submodules to their latest upstream commits.
           branch: ci/update-submodules
           delete-branch: true
           labels: |

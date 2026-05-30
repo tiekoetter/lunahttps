@@ -121,8 +121,10 @@ jobs:
               }
 
               server {
-                  listen 443 ssl http2;
+                  listen 443 ssl;
                   listen 443 quic reuseport;
+
+                  http2 on;
 
                   server_name _;
 
