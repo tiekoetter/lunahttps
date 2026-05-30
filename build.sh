@@ -95,6 +95,7 @@ check_environment() {
     ensure_dir "${MODULES_DIR}/ngx_brotli"
 
     require_file "${LUNA_DIR}/openssl-downloader.sh"
+    require_file "${LUNA_DIR}/openssl-version.env"
     require_file "${BRANDING_PATCH_SCRIPT}"
     require_file "${MODULES_DIR}/ngx_http_substitutions_filter_module/config"
     require_file "${MODULES_DIR}/headers-more-nginx-module/config"

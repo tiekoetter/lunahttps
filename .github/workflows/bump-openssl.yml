@@ -1,0 +1,129 @@
+name: Bump OpenSSL LTS version
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "25 5 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-openssl:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Read current OpenSSL pin
+        id: current
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f luna/openssl-version.env || {
+            echo "luna/openssl-version.env not found" >&2
+            exit 1
+          }
+
+          # shellcheck source=/dev/null
+          . luna/openssl-version.env
+
+          : "${OPENSSL_SERIES:?OPENSSL_SERIES is required}"
+          : "${OPENSSL_VERSION:?OPENSSL_VERSION is required}"
+          : "${OPENSSL_SHA256:?OPENSSL_SHA256 is required}"
+
+          echo "series=${OPENSSL_SERIES}" >> "$GITHUB_OUTPUT"
+          echo "version=${OPENSSL_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${OPENSSL_SHA256}" >> "$GITHUB_OUTPUT"
+
+          echo "Current OpenSSL ${OPENSSL_SERIES} pin: ${OPENSSL_VERSION}"
+
+      - name: Determine latest OpenSSL LTS release
+        id: latest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SERIES="${{ steps.current.outputs.series }}"
+          SERIES_RE="${SERIES//./\\.}"
+          SOURCE_PAGE="$(curl -fsSL --retry 3 --retry-all-errors https://openssl-library.org/source/)"
+
+          LATEST="$(
+            printf '%s\n' "$SOURCE_PAGE" \
+              | grep -oE "openssl-${SERIES_RE}\\.[0-9]+\\.tar\\.gz" \
+              | sed -E 's/^openssl-([0-9]+\.[0-9]+\.[0-9]+)\.tar\.gz$/\1/' \
+              | sort -V \
+              | tail -n1
+          )"
+
+          if [ -z "$LATEST" ]; then
+            echo "Could not determine latest OpenSSL ${{ steps.current.outputs.series }} release" >&2
+            exit 1
+          fi
+
+          FILENAME="openssl-${LATEST}.tar.gz"
+          BASE_URL="https://github.com/openssl/openssl/releases/download/openssl-${LATEST}"
+          SHA256_LINE="$(curl -fsSL --retry 3 --retry-all-errors "${BASE_URL}/${FILENAME}.sha256")"
+          SHA256="$(printf '%s\n' "$SHA256_LINE" | awk '{print $1}')"
+
+          if ! [[ "$SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Invalid SHA256 from ${BASE_URL}/${FILENAME}.sha256: ${SHA256_LINE}" >&2
+            exit 1
+          fi
+
+          curl -fsI --retry 3 --retry-all-errors "${BASE_URL}/${FILENAME}" > /dev/null
+
+          echo "version=${LATEST}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "url=${BASE_URL}/${FILENAME}" >> "$GITHUB_OUTPUT"
+
+          echo "Latest OpenSSL ${{ steps.current.outputs.series }} release: ${LATEST}"
+
+      - name: Update OpenSSL pin if needed
+        if: |
+          steps.latest.outputs.version != steps.current.outputs.version ||
+          steps.latest.outputs.sha256 != steps.current.outputs.sha256
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sed -i -E \
+            's|^OPENSSL_VERSION=.*$|OPENSSL_VERSION="${{ steps.latest.outputs.version }}"|' \
+            luna/openssl-version.env
+
+          sed -i -E \
+            's|^OPENSSL_SHA256=.*$|OPENSSL_SHA256="${{ steps.latest.outputs.sha256 }}"|' \
+            luna/openssl-version.env
+
+          git diff -- luna/openssl-version.env
+
+      - name: Create pull request
+        if: |
+          steps.latest.outputs.version != steps.current.outputs.version ||
+          steps.latest.outputs.sha256 != steps.current.outputs.sha256
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "chore(openssl): bump OpenSSL ${{ steps.current.outputs.series }} from ${{ steps.current.outputs.version }} to ${{ steps.latest.outputs.version }}"
+          title: "chore(openssl): bump OpenSSL ${{ steps.current.outputs.series }} from ${{ steps.current.outputs.version }} to ${{ steps.latest.outputs.version }}"
+          body: |
+            Automated OpenSSL LTS pin update.
+
+            - Previous version: `${{ steps.current.outputs.version }}`
+            - New version: `${{ steps.latest.outputs.version }}`
+            - New SHA256: `${{ steps.latest.outputs.sha256 }}`
+            - Source tarball: ${{ steps.latest.outputs.url }}
+
+            This updates the pinned OpenSSL release used by `luna/openssl-downloader.sh`.
+          branch: chore/bump-openssl-${{ steps.latest.outputs.version }}
+          delete-branch: true
+          labels: |
+            dependencies
+            openssl
+            security
+          add-paths: |
+            luna/openssl-version.env

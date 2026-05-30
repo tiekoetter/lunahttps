@@ -45,6 +45,12 @@ OpenSSL is downloaded and prepared by:
 luna/openssl-downloader.sh
 ```
 
+The OpenSSL LTS version and tarball SHA256 are pinned in:
+
+```text
+luna/openssl-version.env
+```
+
 ## 🔐 Post-Quantum Cryptography
 
 Luna-HTTP/S is built with OpenSSL 3.5.x, which includes support for post-quantum cryptography algorithms such as ML-KEM, ML-DSA, and SLH-DSA.
@@ -162,7 +168,7 @@ Docker builds also expect the submodules to be initialized in the build context.
 
 The build script will:
 
-1. download and prepare OpenSSL,
+1. download and verify the pinned OpenSSL release,
 2. download the configured NGINX mainline version,
 3. apply Luna source and branding patches,
 4. configure NGINX with the selected modules,
@@ -252,6 +258,7 @@ Docker image publishing runs after CI succeeds on the main branch, and can also 
 Additional maintenance workflows may open PRs for:
 
 - NGINX mainline version bumps,
+- OpenSSL LTS version/hash bumps,
 - Debian base image codename updates,
 - submodule updates.
 
@@ -278,6 +285,7 @@ build.sh                     Host build/install script
 Dockerfile                   Container image build
 luna/branding-patch.sh       Luna server/error-page branding patch
 luna/openssl-downloader.sh   OpenSSL download/preparation script
+luna/openssl-version.env     Pinned OpenSSL LTS version and SHA256
 luna/modules/                NGINX third-party modules as submodules
 ```
 
