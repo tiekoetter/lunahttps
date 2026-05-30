@@ -27,15 +27,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     perl \
     tar \
     xz-utils \
-    git \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 
 COPY . .
 
-# Get submodules.
-RUN git submodule update --init --recursive
+# The build context must already include initialized submodules.
+RUN test -f luna/modules/ngx_http_substitutions_filter_module/config \
+ && test -f luna/modules/headers-more-nginx-module/config \
+ && test -f luna/modules/ngx_http_geoip2_module/config \
+ && test -f luna/modules/ngx_brotli/config \
+ && test -f luna/modules/ngx_brotli/deps/brotli/c/include/brotli/encode.h
 
 # OpenSSL downloader populates luna/openssl-lts.
 RUN bash luna/openssl-downloader.sh

@@ -1,0 +1,21 @@
+.git
+.github
+
+# Local build outputs
+luna/build
+luna/openssl-lts
+luna/.tmp
+
+# CI/runtime test artifacts
+ci-test
+nginx-version.txt
+http1.txt
+https1.txt
+http2.txt
+http3.txt
+error-page.txt
+
+# Editor and OS files
+.DS_Store
+*.swp
+*~
