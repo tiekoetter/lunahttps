@@ -7,7 +7,6 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly PROJECT_ROOT="${SCRIPT_DIR}"
 readonly LUNA_DIR="${PROJECT_ROOT}/luna"
-readonly NGINX_INTERNALS_DIR="${LUNA_DIR}/nginx-internals"
 readonly BRANDING_PATCH_SCRIPT="${LUNA_DIR}/branding-patch.sh"
 readonly OPENSSL_DIR="${LUNA_DIR}/openssl-lts"
 readonly MODULES_DIR="${LUNA_DIR}/modules"
@@ -86,7 +85,6 @@ check_environment() {
     require_command perl
 
     ensure_dir "${LUNA_DIR}"
-    ensure_dir "${NGINX_INTERNALS_DIR}"
     ensure_dir "${OPENSSL_DIR}"
     ensure_dir "${MODULES_DIR}"
     ensure_dir "${BUILD_ROOT}"
@@ -98,8 +96,6 @@ check_environment() {
 
     require_file "${LUNA_DIR}/openssl-downloader.sh"
     require_file "${BRANDING_PATCH_SCRIPT}"
-    require_file "${NGINX_INTERNALS_DIR}/ngx_http_header_filter_module.c"
-    require_file "${NGINX_INTERNALS_DIR}/ngx_http_special_response.c"
     require_file "${MODULES_DIR}/ngx_http_substitutions_filter_module/config"
     require_file "${MODULES_DIR}/headers-more-nginx-module/config"
     require_file "${MODULES_DIR}/ngx_http_geoip2_module/config"

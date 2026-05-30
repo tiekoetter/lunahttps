@@ -266,7 +266,6 @@ Additional maintenance workflows may open PRs for:
 ├── luna
 │   ├── branding-patch.sh
 │   ├── openssl-downloader.sh
-│   ├── nginx-internals
 │   └── modules
 └── .github
     └── workflows
@@ -280,7 +279,6 @@ Dockerfile                   Container image build
 luna/branding-patch.sh       Luna server/error-page branding patch
 luna/openssl-downloader.sh   OpenSSL download/preparation script
 luna/modules/                NGINX third-party modules as submodules
-luna/nginx-internals/        Additional internal NGINX source patches
 ```
 
 ---
