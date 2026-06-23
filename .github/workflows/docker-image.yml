@@ -19,6 +19,7 @@ permissions:
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/lunahttps
+  IMAGE_DESCRIPTION: Custom NGINX build with OpenSSL LTS, HTTP/3, Brotli, GeoIP2, headers-more and substitutions filter
 
 jobs:
   docker:
@@ -51,6 +52,8 @@ jobs:
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ${{ env.IMAGE_NAME }}
           flavor: |
@@ -60,7 +63,15 @@ jobs:
             type=ref,event=tag
             type=sha,prefix=sha-
           labels: |
+            org.opencontainers.image.title=Luna-HTTP/S
+            org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
             org.opencontainers.image.url=https://lunahttps.tiekoetter.net
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          annotations: |
+            org.opencontainers.image.title=Luna-HTTP/S
+            org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
+            org.opencontainers.image.url=https://lunahttps.tiekoetter.net
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
@@ -71,5 +82,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
