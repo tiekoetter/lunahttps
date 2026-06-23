@@ -22,9 +22,11 @@ env:
   IMAGE_DESCRIPTION: Custom NGINX build with OpenSSL LTS, HTTP/3, Brotli, GeoIP2, headers-more and substitutions filter
 
 jobs:
-  docker:
-    name: Build and push Docker image
+  docker-amd64:
+    name: Build and push Docker image (amd64)
     runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
 
     # For workflow_run, only publish when CI succeeded.
     # Tag pushes and manual runs run directly.
@@ -38,9 +40,6 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
           submodules: recursive
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -77,14 +76,134 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=docker-amd64
+          cache-to: type=gha,mode=max,scope=docker-amd64
+
+  docker-arm64:
+    name: Build and push Docker image (arm64)
+    runs-on: ubuntu-24.04-arm
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+
+    # For workflow_run, only publish when CI succeeded.
+    # Tag pushes and manual runs run directly.
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') }}
+            type=ref,event=tag
+            type=sha,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=Luna-HTTP/S
+            org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
+            org.opencontainers.image.url=https://lunahttps.tiekoetter.net
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          annotations: |
+            org.opencontainers.image.title=Luna-HTTP/S
+            org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
+            org.opencontainers.image.url=https://lunahttps.tiekoetter.net
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push Docker image by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ${{ env.IMAGE_NAME }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=docker-arm64
+          cache-to: type=gha,mode=max,scope=docker-arm64
+
+  docker-manifest:
+    name: Publish multi-arch Docker manifest
+    runs-on: ubuntu-latest
+    needs:
+      - docker-amd64
+      - docker-arm64
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') }}
+            type=ref,event=tag
+            type=sha,prefix=sha-
+
+      - name: Create multi-arch manifest
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          AMD64_DIGEST: ${{ needs.docker-amd64.outputs.digest }}
+          ARM64_DIGEST: ${{ needs.docker-arm64.outputs.digest }}
+        run: |
+          tag_args=()
+          while IFS= read -r tag; do
+            if [[ -n "${tag}" ]]; then
+              tag_args+=("-t" "${tag}")
+            fi
+          done <<< "${TAGS}"
+
+          docker buildx imagetools create \
+            "${tag_args[@]}" \
+            --annotation "index:org.opencontainers.image.title=Luna-HTTP/S" \
+            --annotation "index:org.opencontainers.image.description=${IMAGE_DESCRIPTION}" \
+            --annotation "index:org.opencontainers.image.url=https://lunahttps.tiekoetter.net" \
+            --annotation "index:org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            "${IMAGE_NAME}@${AMD64_DIGEST}" \
+            "${IMAGE_NAME}@${ARM64_DIGEST}"
