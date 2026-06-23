@@ -5,8 +5,7 @@ IFS=$'\n\t'
 readonly NGINX_VERSION="1.31.2"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
-readonly PROJECT_ROOT="${SCRIPT_DIR}"
-readonly LUNA_DIR="${PROJECT_ROOT}/luna"
+readonly LUNA_DIR="${SCRIPT_DIR}/luna"
 readonly BRANDING_PATCH_SCRIPT="${LUNA_DIR}/branding-patch.sh"
 readonly OPENSSL_DIR="${LUNA_DIR}/openssl-lts"
 readonly MODULES_DIR="${LUNA_DIR}/modules"
@@ -24,17 +23,12 @@ BUILD_MODE="host"
 
 LIGHTBLUE=$'\033[1;34m'
 GREEN=$'\033[0;32m'
-YELLOW=$'\033[1;33m'
 RED=$'\033[0;31m'
 PURPLE=$'\033[0;35m'
 NC=$'\033[0m'
 
 log() {
     printf '%b\n' "${LIGHTBLUE}$*${NC}"
-}
-
-warn() {
-    printf '%b\n' "${YELLOW}Warning: $*${NC}" >&2
 }
 
 die() {
@@ -66,10 +60,6 @@ require_command() {
 
 require_file() {
     [[ -f "$1" ]] || die "Required file not found: $1"
-}
-
-ensure_dir() {
-    mkdir -p "$1"
 }
 
 print_banner() {
@@ -122,22 +112,11 @@ check_environment() {
     require_command tar
     require_command make
     require_command nproc
-    require_command bash
     require_command perl
 
     if [[ "${BUILD_MODE}" == "host" ]]; then
         require_command systemctl
     fi
-
-    ensure_dir "${LUNA_DIR}"
-    ensure_dir "${OPENSSL_DIR}"
-    ensure_dir "${MODULES_DIR}"
-    ensure_dir "${BUILD_ROOT}"
-
-    ensure_dir "${MODULES_DIR}/ngx_http_substitutions_filter_module"
-    ensure_dir "${MODULES_DIR}/headers-more-nginx-module"
-    ensure_dir "${MODULES_DIR}/ngx_http_geoip2_module"
-    ensure_dir "${MODULES_DIR}/ngx_brotli"
 
     require_file "${LUNA_DIR}/openssl-downloader.sh"
     require_file "${LUNA_DIR}/openssl-version.env"
@@ -152,7 +131,7 @@ check_environment() {
 download_openssl() {
     log "Preparing Luna-HTTP/S OpenSSL source..."
     cd "${LUNA_DIR}"
-    bash "./openssl-downloader.sh"
+    "${BASH}" "./openssl-downloader.sh"
 }
 
 prepare_build_dir() {
@@ -205,7 +184,7 @@ download_upstream_nginx() {
 apply_luna_patches() {
     log "Applying Luna-HTTP/S source patches..."
     cd "${SRC_DIR}"
-    bash "${BRANDING_PATCH_SCRIPT}"
+    "${BASH}" "${BRANDING_PATCH_SCRIPT}"
 
     grep -RIn 'luna-http/s\|Luna-HTTP/S' \
         "src/http/ngx_http_header_filter_module.c" \
