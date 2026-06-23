@@ -5,8 +5,7 @@ IFS=$'\n\t'
 readonly NGINX_VERSION="1.31.2"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
-readonly PROJECT_ROOT="${SCRIPT_DIR}"
-readonly LUNA_DIR="${PROJECT_ROOT}/luna"
+readonly LUNA_DIR="${SCRIPT_DIR}/luna"
 readonly BRANDING_PATCH_SCRIPT="${LUNA_DIR}/branding-patch.sh"
 readonly OPENSSL_DIR="${LUNA_DIR}/openssl-lts"
 readonly MODULES_DIR="${LUNA_DIR}/modules"
@@ -20,9 +19,10 @@ readonly NGINX_SIGNING_KEY_URL="https://nginx.org/keys/arut.key"
 readonly NGINX_SIGNING_KEY_FINGERPRINT="43387825DDB1BB97EC36BA5D007C8D7C15D87369"
 readonly SRC_DIR="${BUILD_DIR}/nginx-${NGINX_VERSION}"
 
+BUILD_MODE="host"
+
 LIGHTBLUE=$'\033[1;34m'
 GREEN=$'\033[0;32m'
-YELLOW=$'\033[1;33m'
 RED=$'\033[0;31m'
 PURPLE=$'\033[0;35m'
 NC=$'\033[0m'
@@ -31,13 +31,19 @@ log() {
     printf '%b\n' "${LIGHTBLUE}$*${NC}"
 }
 
-warn() {
-    printf '%b\n' "${YELLOW}Warning: $*${NC}" >&2
-}
-
 die() {
     printf '%b\n' "${RED}Error: $*${NC}" >&2
     exit 1
+}
+
+usage() {
+    cat <<EOF
+Usage: $0 [--host|--docker]
+
+Modes:
+  --host    Build, install, validate, and restart the Luna-HTTP/S service.
+  --docker  Build and install only; intended for Docker builder stages.
+EOF
 }
 
 cleanup_on_error() {
@@ -56,25 +62,45 @@ require_file() {
     [[ -f "$1" ]] || die "Required file not found: $1"
 }
 
-ensure_dir() {
-    mkdir -p "$1"
-}
-
 print_banner() {
     printf '%b\n' "*******************************************************
-          ${PURPLE}Tiekoetter.net Luna-HTTP/S Builder v2${NC}
+              ${PURPLE}Luna-HTTP/S Builder${NC}
 
- Working with NGINX Version \"${NGINX_VERSION}\"
- OpenSSL with TLS 1.3 Support + kTLS
- HTTP3 / QUIC (experimental)
+ Project:        Luna-HTTP/S
+ Mode:           ${BUILD_MODE}
+ Upstream:       NGINX ${NGINX_VERSION}
+ TLS stack:      OpenSSL LTS with TLS 1.3 and kTLS
+ Protocols:      HTTP/1.1, HTTP/2, HTTP/3 / QUIC
 
- ngx_brotli
- ngx_http_geoip2_module
- headers-more-nginx-module
- ngx_http_substitutions_filter_module
+ Built-in modules:
+   - ngx_brotli
+   - ngx_http_geoip2_module
+   - headers-more-nginx-module
+   - ngx_http_substitutions_filter_module
 
  Copyright © 2018-2026 Léon Tiekötter <leon@tiekoetter.com>
 *******************************************************"
+}
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --host)
+                BUILD_MODE="host"
+                ;;
+            --docker)
+                BUILD_MODE="docker"
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            *)
+                die "Unknown argument: $1"
+                ;;
+        esac
+        shift
+    done
 }
 
 check_environment() {
@@ -85,20 +111,12 @@ check_environment() {
     require_command awk
     require_command tar
     require_command make
-    require_command systemctl
     require_command nproc
-    require_command bash
     require_command perl
 
-    ensure_dir "${LUNA_DIR}"
-    ensure_dir "${OPENSSL_DIR}"
-    ensure_dir "${MODULES_DIR}"
-    ensure_dir "${BUILD_ROOT}"
-
-    ensure_dir "${MODULES_DIR}/ngx_http_substitutions_filter_module"
-    ensure_dir "${MODULES_DIR}/headers-more-nginx-module"
-    ensure_dir "${MODULES_DIR}/ngx_http_geoip2_module"
-    ensure_dir "${MODULES_DIR}/ngx_brotli"
+    if [[ "${BUILD_MODE}" == "host" ]]; then
+        require_command systemctl
+    fi
 
     require_file "${LUNA_DIR}/openssl-downloader.sh"
     require_file "${LUNA_DIR}/openssl-version.env"
@@ -107,22 +125,23 @@ check_environment() {
     require_file "${MODULES_DIR}/headers-more-nginx-module/config"
     require_file "${MODULES_DIR}/ngx_http_geoip2_module/config"
     require_file "${MODULES_DIR}/ngx_brotli/config"
+    require_file "${MODULES_DIR}/ngx_brotli/deps/brotli/c/include/brotli/encode.h"
 }
 
 download_openssl() {
-    log "Starting OpenSSL downloader..."
+    log "Preparing Luna-HTTP/S OpenSSL source..."
     cd "${LUNA_DIR}"
-    bash "./openssl-downloader.sh"
+    "${BASH}" "./openssl-downloader.sh"
 }
 
 prepare_build_dir() {
-    log "Preparing clean build directory..."
+    log "Preparing clean Luna-HTTP/S build directory..."
     rm -rf "${BUILD_DIR}"
     mkdir -p "${BUILD_DIR}"
 }
 
-verify_nginx_signature() {
-    log "Verifying NGINX release signature..."
+verify_upstream_signature() {
+    log "Verifying upstream NGINX release signature..."
 
     local key_file="${BUILD_DIR}/nginx-signing.key"
     local key_metadata="${BUILD_DIR}/nginx-signing-key.txt"
@@ -139,44 +158,44 @@ verify_nginx_signature() {
 
     actual_fingerprint="$(awk -F: '$1 == "fpr" { print $10; exit }' "${key_metadata}")"
     [[ "${actual_fingerprint}" == "${NGINX_SIGNING_KEY_FINGERPRINT}" ]] || \
-        die "Unexpected NGINX signing key fingerprint: ${actual_fingerprint}"
+        die "Unexpected upstream NGINX signing key fingerprint: ${actual_fingerprint}"
 
     GNUPGHOME="${gnupg_home}" gpg --batch --import "${key_file}" >/dev/null
     if ! verify_status="$(GNUPGHOME="${gnupg_home}" gpg --batch --status-fd 1 --verify "${BUILD_DIR}/${NGINX_SIGNATURE}" "${BUILD_DIR}/${NGINX_TARBALL}" 2>/dev/null)"; then
-        die "NGINX release signature verification failed."
+        die "Upstream NGINX release signature verification failed."
     fi
 
     grep -q "^\[GNUPG:\] VALIDSIG ${NGINX_SIGNING_KEY_FINGERPRINT} " <<< "${verify_status}" || \
-        die "NGINX release signature was not made by the pinned key."
+        die "Upstream NGINX release signature was not made by the pinned key."
 
     rm -rf "${gnupg_home}" "${key_file}" "${key_metadata}"
 }
 
-download_nginx() {
-    log "Downloading NGINX ${NGINX_VERSION}..."
+download_upstream_nginx() {
+    log "Downloading upstream NGINX ${NGINX_VERSION}..."
     cd "${BUILD_DIR}"
     wget -O "${NGINX_TARBALL}" "${NGINX_URL}"
     wget -O "${NGINX_SIGNATURE}" "${NGINX_SIGNATURE_URL}"
-    verify_nginx_signature
+    verify_upstream_signature
     tar -xzf "${NGINX_TARBALL}"
     [[ -d "${SRC_DIR}" ]] || die "Extracted source directory not found: ${SRC_DIR}"
 }
 
-patch_nginx() {
-    log "Applying Luna-HTTP/S branding patch..."
+apply_luna_patches() {
+    log "Applying Luna-HTTP/S source patches..."
     cd "${SRC_DIR}"
-    bash "${BRANDING_PATCH_SCRIPT}"
+    "${BASH}" "${BRANDING_PATCH_SCRIPT}"
 
     grep -RIn 'luna-http/s\|Luna-HTTP/S' \
         "src/http/ngx_http_header_filter_module.c" \
         "src/http/ngx_http_special_response.c" \
         "src/http/v2/ngx_http_v2_filter_module.c" \
         "src/http/v3/ngx_http_v3_filter_module.c" >/dev/null || \
-        die "Luna branding patch did not apply correctly."
+        die "Luna-HTTP/S branding patch did not apply correctly."
 }
 
-configure_nginx() {
-    log "Configuring Luna-HTTP/S..."
+configure_luna() {
+    log "Configuring Luna-HTTP/S build..."
     cd "${SRC_DIR}"
 
     ./configure \
@@ -208,43 +227,52 @@ configure_nginx() {
         --with-openssl-opt=enable-ktls
 }
 
-build_nginx() {
+build_luna() {
     log "Building Luna-HTTP/S..."
     cd "${SRC_DIR}"
     make -j"$(nproc)"
 }
 
-install_nginx() {
+install_luna() {
     log "Installing Luna-HTTP/S..."
     cd "${SRC_DIR}"
     make install
 }
 
-validate_nginx() {
-    log "Validating installed NGINX configuration..."
+validate_luna() {
+    log "Validating installed Luna-HTTP/S configuration..."
     /usr/sbin/nginx -t
 }
 
-restart_nginx() {
-    log "Restarting NGINX..."
+restart_luna() {
+    log "Restarting Luna-HTTP/S service..."
     systemctl restart nginx
-    systemctl --no-pager --full status nginx || die "NGINX restart failed."
+    systemctl --no-pager --full status nginx || die "Luna-HTTP/S service restart failed."
 }
 
 main() {
+    parse_args "$@"
+
     print_banner
     check_environment
     download_openssl
     prepare_build_dir
-    download_nginx
-    patch_nginx
-    configure_nginx
-    build_nginx
-    install_nginx
-    validate_nginx
-    restart_nginx
+    download_upstream_nginx
+    apply_luna_patches
+    configure_luna
+    build_luna
+    install_luna
 
-    printf '\n%b\n' "${GREEN}Done.${NC} Luna-HTTP/S is now active and online!"
+    if [[ "${BUILD_MODE}" == "host" ]]; then
+        validate_luna
+        restart_luna
+    fi
+
+    if [[ "${BUILD_MODE}" == "docker" ]]; then
+        printf '\n%b\n' "${GREEN}Done.${NC} Luna-HTTP/S is built and installed for the container image."
+    else
+        printf '\n%b\n' "${GREEN}Done.${NC} Luna-HTTP/S is now active and online!"
+    fi
 }
 
 main "$@"
