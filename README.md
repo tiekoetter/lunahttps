@@ -167,8 +167,15 @@ git submodule update --init --recursive
 ```
 
 Docker builds also expect the submodules to be initialized in the build context.
+The Dockerfile uses the same build script in Docker mode:
 
-The build script will:
+```bash
+./build.sh --docker
+```
+
+That mode performs the shared download, verification, patch, configure, build, and install flow without validating or restarting a host system service.
+
+In default host mode, the build script will:
 
 1. download and verify the pinned OpenSSL release,
 2. download the configured NGINX mainline version,
