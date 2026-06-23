@@ -13,7 +13,11 @@ readonly MODULES_DIR="${LUNA_DIR}/modules"
 readonly BUILD_ROOT="${LUNA_DIR}/build"
 readonly BUILD_DIR="${BUILD_ROOT}/nginx-build-${NGINX_VERSION}"
 readonly NGINX_TARBALL="nginx-${NGINX_VERSION}.tar.gz"
+readonly NGINX_SIGNATURE="${NGINX_TARBALL}.asc"
 readonly NGINX_URL="https://nginx.org/download/${NGINX_TARBALL}"
+readonly NGINX_SIGNATURE_URL="${NGINX_URL}.asc"
+readonly NGINX_SIGNING_KEY_URL="https://nginx.org/keys/arut.key"
+readonly NGINX_SIGNING_KEY_FINGERPRINT="43387825DDB1BB97EC36BA5D007C8D7C15D87369"
 readonly SRC_DIR="${BUILD_DIR}/nginx-${NGINX_VERSION}"
 
 LIGHTBLUE=$'\033[1;34m'
@@ -77,6 +81,8 @@ check_environment() {
     [[ "${EUID}" -eq 0 ]] || die "Please run this script as root."
 
     require_command wget
+    require_command gpg
+    require_command awk
     require_command tar
     require_command make
     require_command systemctl
@@ -115,10 +121,42 @@ prepare_build_dir() {
     mkdir -p "${BUILD_DIR}"
 }
 
+verify_nginx_signature() {
+    log "Verifying NGINX release signature..."
+
+    local key_file="${BUILD_DIR}/nginx-signing.key"
+    local key_metadata="${BUILD_DIR}/nginx-signing-key.txt"
+    local gnupg_home="${BUILD_DIR}/gnupg"
+    local actual_fingerprint
+    local verify_status
+
+    rm -rf "${gnupg_home}"
+    mkdir -m 700 -p "${gnupg_home}"
+
+    wget -O "${key_file}" "${NGINX_SIGNING_KEY_URL}"
+    GNUPGHOME="${gnupg_home}" gpg --batch --with-colons --import-options show-only --import "${key_file}" > "${key_metadata}"
+
+    actual_fingerprint="$(awk -F: '$1 == "fpr" { print $10; exit }' "${key_metadata}")"
+    [[ "${actual_fingerprint}" == "${NGINX_SIGNING_KEY_FINGERPRINT}" ]] || \
+        die "Unexpected NGINX signing key fingerprint: ${actual_fingerprint}"
+
+    GNUPGHOME="${gnupg_home}" gpg --batch --import "${key_file}" >/dev/null
+    if ! verify_status="$(GNUPGHOME="${gnupg_home}" gpg --batch --status-fd 1 --verify "${BUILD_DIR}/${NGINX_SIGNATURE}" "${BUILD_DIR}/${NGINX_TARBALL}" 2>/dev/null)"; then
+        die "NGINX release signature verification failed."
+    fi
+
+    grep -q "^\[GNUPG:\] VALIDSIG ${NGINX_SIGNING_KEY_FINGERPRINT} " <<< "${verify_status}" || \
+        die "NGINX release signature was not made by the pinned key."
+
+    rm -rf "${gnupg_home}" "${key_file}" "${key_metadata}"
+}
+
 download_nginx() {
     log "Downloading NGINX ${NGINX_VERSION}..."
     cd "${BUILD_DIR}"
     wget -O "${NGINX_TARBALL}" "${NGINX_URL}"
+    wget -O "${NGINX_SIGNATURE}" "${NGINX_SIGNATURE_URL}"
+    verify_nginx_signature
     tar -xzf "${NGINX_TARBALL}"
     [[ -d "${SRC_DIR}" ]] || die "Extracted source directory not found: ${SRC_DIR}"
 }

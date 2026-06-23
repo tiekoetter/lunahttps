@@ -2,10 +2,14 @@
 
 ARG DEBIAN_VERSION=trixie
 ARG NGINX_VERSION=1.31.2
+ARG NGINX_SIGNING_KEY_URL=https://nginx.org/keys/arut.key
+ARG NGINX_SIGNING_KEY_FINGERPRINT=43387825DDB1BB97EC36BA5D007C8D7C15D87369
 
 FROM debian:${DEBIAN_VERSION} AS builder
 
 ARG NGINX_VERSION
+ARG NGINX_SIGNING_KEY_URL
+ARG NGINX_SIGNING_KEY_FINGERPRINT
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -46,6 +50,17 @@ RUN bash luna/openssl-downloader.sh
 RUN mkdir -p /src/luna/build \
  && cd /src/luna/build \
  && wget -O "nginx-${NGINX_VERSION}.tar.gz" "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" \
+ && wget -O "nginx-${NGINX_VERSION}.tar.gz.asc" "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz.asc" \
+ && wget -O nginx-signing.key "${NGINX_SIGNING_KEY_URL}" \
+ && export GNUPGHOME="$(mktemp -d)" \
+ && chmod 700 "${GNUPGHOME}" \
+ && gpg --batch --with-colons --import-options show-only --import nginx-signing.key > nginx-signing-key.txt \
+ && actual_fingerprint="$(awk -F: '$1 == "fpr" { print $10; exit }' nginx-signing-key.txt)" \
+ && test "${actual_fingerprint}" = "${NGINX_SIGNING_KEY_FINGERPRINT}" \
+ && gpg --batch --import nginx-signing.key >/dev/null \
+ && gpg --batch --status-fd 1 --verify "nginx-${NGINX_VERSION}.tar.gz.asc" "nginx-${NGINX_VERSION}.tar.gz" > nginx-verify-status.txt 2>/dev/null \
+ && grep -q "^\[GNUPG:\] VALIDSIG ${NGINX_SIGNING_KEY_FINGERPRINT} " nginx-verify-status.txt \
+ && rm -rf "${GNUPGHOME}" nginx-signing.key nginx-signing-key.txt nginx-verify-status.txt \
  && tar -xzf "nginx-${NGINX_VERSION}.tar.gz"
 
 WORKDIR /src/luna/build/nginx-${NGINX_VERSION}
