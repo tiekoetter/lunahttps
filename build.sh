@@ -131,7 +131,8 @@ verify_nginx_signature() {
     local verify_status
 
     rm -rf "${gnupg_home}"
-    mkdir -m 700 -p "${gnupg_home}"
+    mkdir -p "${gnupg_home}"
+    chmod 700 "${gnupg_home}"
 
     wget -O "${key_file}" "${NGINX_SIGNING_KEY_URL}"
     GNUPGHOME="${gnupg_home}" gpg --batch --with-colons --import-options show-only --import "${key_file}" > "${key_metadata}"
