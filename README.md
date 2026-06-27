@@ -2,7 +2,7 @@
 
 Custom-built NGINX with enhanced performance, modern protocol support, Docker image builds, and security-focused features.
 
-Luna-HTTP/S is based on NGINX mainline and adds a curated build configuration with OpenSSL 3.5.x, TLS 1.3, post-quantum cryptography support, HTTP/2, HTTP/3 / QUIC, Brotli, GeoIP2, advanced header manipulation, and response body substitution support.
+Luna-HTTP/S is based on NGINX mainline and adds a curated build configuration with OpenSSL 3.5.x, TLS 1.3, post-quantum cryptography support, HTTP/2, HTTP/3 / QUIC, Brotli, real client IP handling, GeoIP2, advanced header manipulation, and response body substitution support.
 
 Project information is available at [lunahttps.tiekoetter.net](https://lunahttps.tiekoetter.net).
 
@@ -16,6 +16,7 @@ Project information is available at [lunahttps.tiekoetter.net](https://lunahttps
 - **HTTP/2 support**
 - **HTTP/3 / QUIC support** for reduced latency and faster connections
 - **Brotli compression** for reduced bandwidth usage and faster page loads
+- **ngx_http_realip_module** for preserving trusted proxy client addresses
 - **ngx_http_geoip2_module** for GeoIP-based request handling
 - **headers-more-nginx-module** for advanced header control
 - **ngx_http_substitutions_filter_module** for RegEx-based response body filtering and substitution
@@ -30,6 +31,7 @@ This build is tailored for high-performance environments and is compiled with ad
 
 **Included modules:**
 
+- [ngx_http_realip_module](https://nginx.org/en/docs/http/ngx_http_realip_module.html)
 - [ngx_brotli](https://github.com/google/ngx_brotli)
 - [ngx_http_geoip2_module](https://github.com/leev/ngx_http_geoip2_module)
 - [headers-more-nginx-module](https://github.com/openresty/headers-more-nginx-module)

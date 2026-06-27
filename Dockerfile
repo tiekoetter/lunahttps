@@ -42,7 +42,7 @@ RUN bash ./build.sh --docker
 FROM debian:${DEBIAN_VERSION} AS runtime
 
 LABEL org.opencontainers.image.title="Luna-HTTP/S"
-LABEL org.opencontainers.image.description="Custom NGINX build with OpenSSL LTS, HTTP/3, Brotli, GeoIP2, headers-more and substitutions filter"
+LABEL org.opencontainers.image.description="Custom NGINX build with OpenSSL LTS, HTTP/3, Brotli, real IP, GeoIP2, headers-more and substitutions filter"
 LABEL org.opencontainers.image.url="https://lunahttps.tiekoetter.net"
 LABEL org.opencontainers.image.source="https://github.com/tiekoetter/lunahttps"
 

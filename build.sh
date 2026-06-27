@@ -74,6 +74,7 @@ print_banner() {
 
  Built-in modules:
    - ngx_brotli
+   - ngx_http_realip_module
    - ngx_http_geoip2_module
    - headers-more-nginx-module
    - ngx_http_substitutions_filter_module
@@ -211,6 +212,7 @@ configure_luna() {
         --with-http_ssl_module \
         --with-http_v2_module \
         --with-http_v3_module \
+        --with-http_realip_module \
         --with-http_stub_status_module \
         --with-http_gzip_static_module \
         --with-http_sub_module \
