@@ -188,7 +188,7 @@ jobs:
 
       - name: Test HTTP/3 branding
         run: |
-          timeout 20s gtlsclient \
+          timeout 20s gtlsclient --exit-on-all-streams-close \
             127.0.0.1 18443 https://localhost:18443/ \
             > http3.txt 2>&1
 
