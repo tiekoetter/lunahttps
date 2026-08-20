@@ -283,6 +283,7 @@ Additional maintenance workflows may open PRs for:
 ├── Dockerfile
 ├── luna
 │   ├── branding-patch.sh
+│   ├── nginx-signing-keys.txt
 │   ├── openssl-downloader.sh
 │   └── modules
 └── .github
@@ -295,6 +296,7 @@ Important paths:
 build.sh                     Host build/install script
 Dockerfile                   Container image build
 luna/branding-patch.sh       Luna server/error-page branding patch
+luna/nginx-signing-keys.txt  Pinned NGINX source signing keys
 luna/openssl-downloader.sh   OpenSSL download/preparation script
 luna/openssl-version.env     Pinned OpenSSL LTS version and SHA256
 luna/modules/                NGINX third-party modules as submodules

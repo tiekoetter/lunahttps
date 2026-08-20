@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly LUNA_DIR="${SCRIPT_DIR}/luna"
 readonly BRANDING_PATCH_SCRIPT="${LUNA_DIR}/branding-patch.sh"
+readonly NGINX_SIGNING_KEYS_FILE="${LUNA_DIR}/nginx-signing-keys.txt"
 readonly OPENSSL_DIR="${LUNA_DIR}/openssl-lts"
 readonly MODULES_DIR="${LUNA_DIR}/modules"
 readonly BUILD_ROOT="${LUNA_DIR}/build"
@@ -15,8 +16,6 @@ readonly NGINX_TARBALL="nginx-${NGINX_VERSION}.tar.gz"
 readonly NGINX_SIGNATURE="${NGINX_TARBALL}.asc"
 readonly NGINX_URL="https://nginx.org/download/${NGINX_TARBALL}"
 readonly NGINX_SIGNATURE_URL="${NGINX_URL}.asc"
-readonly NGINX_SIGNING_KEY_URL="https://nginx.org/keys/arut.key"
-readonly NGINX_SIGNING_KEY_FINGERPRINT="43387825DDB1BB97EC36BA5D007C8D7C15D87369"
 readonly SRC_DIR="${BUILD_DIR}/nginx-${NGINX_VERSION}"
 
 BUILD_MODE="host"
@@ -121,6 +120,7 @@ check_environment() {
 
     require_file "${LUNA_DIR}/openssl-downloader.sh"
     require_file "${LUNA_DIR}/openssl-version.env"
+    require_file "${NGINX_SIGNING_KEYS_FILE}"
     require_file "${BRANDING_PATCH_SCRIPT}"
     require_file "${MODULES_DIR}/ngx_http_substitutions_filter_module/config"
     require_file "${MODULES_DIR}/headers-more-nginx-module/config"
@@ -144,32 +144,67 @@ prepare_build_dir() {
 verify_upstream_signature() {
     log "Verifying upstream NGINX release signature..."
 
-    local key_file="${BUILD_DIR}/nginx-signing.key"
-    local key_metadata="${BUILD_DIR}/nginx-signing-key.txt"
     local gnupg_home="${BUILD_DIR}/gnupg"
+    local key_file
+    local key_metadata
+    local expected_fingerprint
+    local key_url
+    local extra
     local actual_fingerprint
+    local primary_key_count
+    local imported_key_count=0
     local verify_status
+    local valid_fingerprint
 
     rm -rf "${gnupg_home}"
     mkdir -p "${gnupg_home}"
     chmod 700 "${gnupg_home}"
 
-    wget -O "${key_file}" "${NGINX_SIGNING_KEY_URL}"
-    GNUPGHOME="${gnupg_home}" gpg --batch --with-colons --import-options show-only --import "${key_file}" > "${key_metadata}"
+    while IFS=$' \t' read -r expected_fingerprint key_url extra <&3 || \
+        [[ -n "${expected_fingerprint}${key_url}${extra}" ]]; do
+        [[ -z "${expected_fingerprint}" || "${expected_fingerprint}" == \#* ]] && continue
 
-    actual_fingerprint="$(awk -F: '$1 == "fpr" { print $10; exit }' "${key_metadata}")"
-    [[ "${actual_fingerprint}" == "${NGINX_SIGNING_KEY_FINGERPRINT}" ]] || \
-        die "Unexpected upstream NGINX signing key fingerprint: ${actual_fingerprint}"
+        [[ -z "${extra}" ]] || \
+            die "Malformed NGINX signing key entry: ${expected_fingerprint} ${key_url} ${extra}"
+        [[ "${expected_fingerprint}" =~ ^[A-F0-9]{40}$ ]] || \
+            die "Invalid NGINX signing key fingerprint: ${expected_fingerprint}"
+        [[ "${key_url}" == https://nginx.org/keys/*.key ]] || \
+            die "Invalid NGINX signing key URL: ${key_url}"
 
-    GNUPGHOME="${gnupg_home}" gpg --batch --import "${key_file}" >/dev/null
-    if ! verify_status="$(GNUPGHOME="${gnupg_home}" gpg --batch --status-fd 1 --verify "${BUILD_DIR}/${NGINX_SIGNATURE}" "${BUILD_DIR}/${NGINX_TARBALL}" 2>/dev/null)"; then
+        key_file="${BUILD_DIR}/nginx-signing-key-${imported_key_count}.key"
+        key_metadata="${BUILD_DIR}/nginx-signing-key-${imported_key_count}.txt"
+
+        wget -O "${key_file}" "${key_url}"
+        GNUPGHOME="${gnupg_home}" gpg --batch --no-autostart --with-colons --import-options show-only --import "${key_file}" > "${key_metadata}"
+
+        primary_key_count="$(awk -F: '$1 == "pub" { count++ } END { print count + 0 }' "${key_metadata}")"
+        [[ "${primary_key_count}" -eq 1 ]] || \
+            die "Expected exactly one primary key in ${key_url}, found ${primary_key_count}."
+
+        actual_fingerprint="$(awk -F: '$1 == "fpr" { print $10; exit }' "${key_metadata}")"
+        [[ "${actual_fingerprint}" == "${expected_fingerprint}" ]] || \
+            die "Unexpected NGINX signing key fingerprint from ${key_url}: ${actual_fingerprint}"
+
+        GNUPGHOME="${gnupg_home}" gpg --batch --no-autostart --import "${key_file}" >/dev/null
+        rm -f "${key_file}" "${key_metadata}"
+        imported_key_count=$((imported_key_count + 1))
+    done 3< "${NGINX_SIGNING_KEYS_FILE}"
+
+    [[ "${imported_key_count}" -gt 0 ]] || \
+        die "No trusted NGINX signing keys configured in ${NGINX_SIGNING_KEYS_FILE}."
+
+    if ! verify_status="$(GNUPGHOME="${gnupg_home}" gpg --batch --no-autostart --status-fd 1 --verify "${BUILD_DIR}/${NGINX_SIGNATURE}" "${BUILD_DIR}/${NGINX_TARBALL}")"; then
         die "Upstream NGINX release signature verification failed."
     fi
 
-    grep -q "^\[GNUPG:\] VALIDSIG ${NGINX_SIGNING_KEY_FINGERPRINT} " <<< "${verify_status}" || \
-        die "Upstream NGINX release signature was not made by the pinned key."
+    valid_fingerprint="$(awk '$1 == "[GNUPG:]" && $2 == "VALIDSIG" { print (length($NF) == 40 ? $NF : $3); exit }' <<< "${verify_status}")"
+    [[ -n "${valid_fingerprint}" ]] || \
+        die "GPG did not report a valid NGINX release signature."
 
-    rm -rf "${gnupg_home}" "${key_file}" "${key_metadata}"
+    awk -v fingerprint="${valid_fingerprint}" '$1 == fingerprint { found = 1 } END { exit !found }' "${NGINX_SIGNING_KEYS_FILE}" || \
+        die "Upstream NGINX release signature was not made by a pinned key: ${valid_fingerprint}"
+
+    rm -rf "${gnupg_home}"
 }
 
 download_upstream_nginx() {
