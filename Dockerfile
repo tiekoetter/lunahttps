@@ -4,31 +4,24 @@ ARG DEBIAN_VERSION=trixie
 
 FROM debian:${DEBIAN_VERSION} AS builder
 
-ENV DEBIAN_FRONTEND=noninteractive
+ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    wget \
     gnupg \
     build-essential \
-    make \
-    gcc \
-    libc6-dev \
     libpcre2-dev \
     zlib1g-dev \
     libmaxminddb-dev \
-    libgd-dev \
-    libxml2-dev \
-    libxslt1-dev \
     perl \
     tar \
-    xz-utils \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 
-COPY . .
+COPY build.sh ./
+COPY luna ./luna
 
 # The build context must already include initialized submodules.
 RUN test -f luna/modules/ngx_http_substitutions_filter_module/config \
@@ -46,21 +39,24 @@ LABEL org.opencontainers.image.description="Custom NGINX build with OpenSSL LTS,
 LABEL org.opencontainers.image.url="https://lunahttps.tiekoetter.net"
 LABEL org.opencontainers.image.source="https://github.com/tiekoetter/lunahttps"
 
-ENV DEBIAN_FRONTEND=noninteractive
+ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libpcre2-8-0 \
     zlib1g \
     libmaxminddb0 \
-    libgd3 \
-    libxml2 \
-    libxslt1.1 \
     tzdata \
- && rm -rf /var/lib/apt/lists/* \
- && addgroup --system www-data || true \
- && adduser --system --no-create-home --ingroup www-data www-data || true \
- && mkdir -p /var/log/nginx /var/cache/nginx /var/run /var/lock/nginx
+ && rm -rf /var/lib/apt/lists/*
+
+RUN set -eu; \
+    if ! getent group www-data >/dev/null; then \
+        addgroup --system www-data; \
+    fi; \
+    if ! id -u www-data >/dev/null 2>&1; then \
+        adduser --system --no-create-home --ingroup www-data www-data; \
+    fi; \
+    mkdir -p /var/log/nginx /var/cache/nginx /var/run /var/lock/nginx
 
 COPY --from=builder /usr/sbin/nginx /usr/sbin/nginx
 COPY --from=builder /usr/share/nginx /usr/share/nginx

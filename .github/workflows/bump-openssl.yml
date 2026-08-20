@@ -9,9 +9,14 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: bump-openssl
+  cancel-in-progress: false
+
 jobs:
   bump-openssl:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -37,9 +42,11 @@ jobs:
           : "${OPENSSL_VERSION:?OPENSSL_VERSION is required}"
           : "${OPENSSL_SHA256:?OPENSSL_SHA256 is required}"
 
-          echo "series=${OPENSSL_SERIES}" >> "$GITHUB_OUTPUT"
-          echo "version=${OPENSSL_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "sha256=${OPENSSL_SHA256}" >> "$GITHUB_OUTPUT"
+          {
+            echo "series=${OPENSSL_SERIES}"
+            echo "version=${OPENSSL_VERSION}"
+            echo "sha256=${OPENSSL_SHA256}"
+          } >> "$GITHUB_OUTPUT"
 
           echo "Current OpenSSL ${OPENSSL_SERIES} pin: ${OPENSSL_VERSION}"
 
@@ -78,9 +85,11 @@ jobs:
 
           curl -fsI --retry 3 --retry-all-errors "${BASE_URL}/${FILENAME}" > /dev/null
 
-          echo "version=${LATEST}" >> "$GITHUB_OUTPUT"
-          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
-          echo "url=${BASE_URL}/${FILENAME}" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=${LATEST}"
+            echo "sha256=${SHA256}"
+            echo "url=${BASE_URL}/${FILENAME}"
+          } >> "$GITHUB_OUTPUT"
 
           echo "Latest OpenSSL ${{ steps.current.outputs.series }} release: ${LATEST}"
 

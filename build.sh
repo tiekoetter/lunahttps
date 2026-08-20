@@ -61,6 +61,16 @@ require_file() {
     [[ -f "$1" ]] || die "Required file not found: $1"
 }
 
+download_file() {
+    local destination="$1"
+    local url="$2"
+
+    curl --fail --location --show-error \
+        --retry 3 --retry-all-errors --connect-timeout 30 \
+        --proto '=https' --proto-redir '=https' \
+        --output "${destination}" "${url}"
+}
+
 print_banner() {
     printf '%b\n' "*******************************************************
               ${PURPLE}Luna-HTTP/S Builder${NC}
@@ -106,7 +116,7 @@ parse_args() {
 check_environment() {
     [[ "${EUID}" -eq 0 ]] || die "Please run this script as root."
 
-    require_command wget
+    require_command curl
     require_command gpg
     require_command awk
     require_command tar
@@ -174,7 +184,7 @@ verify_upstream_signature() {
         key_file="${BUILD_DIR}/nginx-signing-key-${imported_key_count}.key"
         key_metadata="${BUILD_DIR}/nginx-signing-key-${imported_key_count}.txt"
 
-        wget -O "${key_file}" "${key_url}"
+        download_file "${key_file}" "${key_url}"
         GNUPGHOME="${gnupg_home}" gpg --batch --no-autostart --with-colons --import-options show-only --import "${key_file}" > "${key_metadata}"
 
         primary_key_count="$(awk -F: '$1 == "pub" { count++ } END { print count + 0 }' "${key_metadata}")"
@@ -210,11 +220,12 @@ verify_upstream_signature() {
 download_upstream_nginx() {
     log "Downloading upstream NGINX ${NGINX_VERSION}..."
     cd "${BUILD_DIR}"
-    wget -O "${NGINX_TARBALL}" "${NGINX_URL}"
-    wget -O "${NGINX_SIGNATURE}" "${NGINX_SIGNATURE_URL}"
+    download_file "${NGINX_TARBALL}" "${NGINX_URL}"
+    download_file "${NGINX_SIGNATURE}" "${NGINX_SIGNATURE_URL}"
     verify_upstream_signature
     tar -xzf "${NGINX_TARBALL}"
     [[ -d "${SRC_DIR}" ]] || die "Extracted source directory not found: ${SRC_DIR}"
+    rm -f "${NGINX_TARBALL}" "${NGINX_SIGNATURE}"
 }
 
 apply_luna_patches() {

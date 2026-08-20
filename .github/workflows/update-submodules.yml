@@ -9,9 +9,14 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: update-submodules
+  cancel-in-progress: false
+
 jobs:
   update-submodules:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -27,12 +32,15 @@ jobs:
 
       - name: Abort if any direct submodule is dirty internally
         run: |
+          # The quoted commands intentionally run inside each submodule.
+          # shellcheck disable=SC2016
           if ! git submodule foreach '
             git diff --quiet &&
             git diff --cached --quiet &&
             test -z "$(git ls-files --others --exclude-standard)"
           '; then
             echo "A direct submodule has local modified or untracked files after update."
+            # shellcheck disable=SC2016
             git submodule foreach 'echo "== $name =="; git status --short'
             exit 1
           fi

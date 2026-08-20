@@ -17,14 +17,20 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: docker-image-${{ (github.event_name == 'workflow_run' || github.ref == 'refs/heads/main') && 'latest' || github.ref }}
+  cancel-in-progress: false
+
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/lunahttps
   IMAGE_DESCRIPTION: Custom NGINX build with OpenSSL LTS, HTTP/3, Brotli, GeoIP2, headers-more and substitutions filter
+  SOURCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   docker-amd64:
     name: Build and push Docker image (amd64)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       digest: ${{ steps.build.outputs.digest }}
 
@@ -35,10 +41,15 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
 
     steps:
+      - name: Resolve source tag
+        id: source
+        run: |
+          echo "tag=sha-${SOURCE_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ env.SOURCE_SHA }}
           submodules: recursive
 
       - name: Set up Docker Buildx
@@ -63,35 +74,38 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') }}
             type=ref,event=tag
-            type=sha,prefix=sha-
+            type=raw,value=${{ steps.source.outputs.tag }}
           labels: |
             org.opencontainers.image.title=Luna-HTTP/S
             org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
             org.opencontainers.image.url=https://lunahttps.tiekoetter.net
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.SOURCE_SHA }}
           annotations: |
             org.opencontainers.image.title=Luna-HTTP/S
             org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
             org.opencontainers.image.url=https://lunahttps.tiekoetter.net
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.SOURCE_SHA }}
 
-      - name: Build and push Docker image
+      - name: Build and push Docker image by digest
         id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ${{ env.IMAGE_NAME }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=gha,scope=docker-amd64
-          cache-to: type=gha,mode=max,scope=docker-amd64
+          cache-from: type=gha,scope=lunahttps-amd64
+          cache-to: type=gha,mode=max,scope=lunahttps-amd64
 
   docker-arm64:
     name: Build and push Docker image (arm64)
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
     outputs:
       digest: ${{ steps.build.outputs.digest }}
 
@@ -102,10 +116,15 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
 
     steps:
+      - name: Resolve source tag
+        id: source
+        run: |
+          echo "tag=sha-${SOURCE_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ env.SOURCE_SHA }}
           submodules: recursive
 
       - name: Set up Docker Buildx
@@ -130,17 +149,19 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') }}
             type=ref,event=tag
-            type=sha,prefix=sha-
+            type=raw,value=${{ steps.source.outputs.tag }}
           labels: |
             org.opencontainers.image.title=Luna-HTTP/S
             org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
             org.opencontainers.image.url=https://lunahttps.tiekoetter.net
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.SOURCE_SHA }}
           annotations: |
             org.opencontainers.image.title=Luna-HTTP/S
             org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
             org.opencontainers.image.url=https://lunahttps.tiekoetter.net
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.SOURCE_SHA }}
 
       - name: Build and push Docker image by digest
         id: build
@@ -159,11 +180,17 @@ jobs:
   docker-manifest:
     name: Publish multi-arch Docker manifest
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs:
       - docker-amd64
       - docker-arm64
 
     steps:
+      - name: Resolve source tag
+        id: source
+        run: |
+          echo "tag=sha-${SOURCE_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -184,7 +211,7 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') }}
             type=ref,event=tag
-            type=sha,prefix=sha-
+            type=raw,value=${{ steps.source.outputs.tag }}
 
       - name: Create multi-arch manifest
         env:
@@ -205,5 +232,6 @@ jobs:
             --annotation "index:org.opencontainers.image.description=${IMAGE_DESCRIPTION}" \
             --annotation "index:org.opencontainers.image.url=https://lunahttps.tiekoetter.net" \
             --annotation "index:org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --annotation "index:org.opencontainers.image.revision=${SOURCE_SHA}" \
             "${IMAGE_NAME}@${AMD64_DIGEST}" \
             "${IMAGE_NAME}@${ARM64_DIGEST}"

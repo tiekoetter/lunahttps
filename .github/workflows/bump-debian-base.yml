@@ -9,24 +9,40 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: bump-debian-base
+  cancel-in-progress: false
+
 jobs:
   bump-debian:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Install distro-info
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y distro-info
-
       - name: Check current Debian stable codename
         id: debian
         run: |
-          stable_codename="$(debian-distro-info --stable)"
+          set -euo pipefail
+
+          stable_codename="$(
+            curl -fsSL --retry 3 --retry-all-errors \
+              https://deb.debian.org/debian/dists/stable/Release \
+              | awk '$1 == "Codename:" { print $2; exit }'
+          )"
           current_codename="$(grep -E '^ARG DEBIAN_VERSION=' Dockerfile | head -n1 | cut -d= -f2)"
+
+          if ! [[ "${stable_codename}" =~ ^[a-z][a-z0-9-]*$ ]]; then
+            echo "Invalid Debian stable codename: ${stable_codename}" >&2
+            exit 1
+          fi
+
+          if ! [[ "${current_codename}" =~ ^[a-z][a-z0-9-]*$ ]]; then
+            echo "Invalid Dockerfile Debian codename: ${current_codename}" >&2
+            exit 1
+          fi
 
           echo "stable_codename=${stable_codename}" >> "$GITHUB_OUTPUT"
           echo "current_codename=${current_codename}" >> "$GITHUB_OUTPUT"

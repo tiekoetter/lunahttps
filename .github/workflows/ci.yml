@@ -20,20 +20,19 @@ jobs:
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Install ShellCheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
 
       - name: Run ShellCheck
         run: |
+          if ! command -v shellcheck > /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends shellcheck
+          fi
+
           shellcheck build.sh
           shellcheck -x luna/openssl-downloader.sh
           shellcheck luna/branding-patch.sh
@@ -41,7 +40,7 @@ jobs:
   docker-build-test:
     name: Docker build and runtime test
     runs-on: ubuntu-latest
-    needs: shellcheck
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -70,8 +69,14 @@ jobs:
           push: false
           load: true
           tags: lunahttps:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=lunahttps-amd64
+          cache-to: type=gha,mode=max,scope=lunahttps-amd64
+
+      - name: Install HTTP/3 test client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ngtcp2-client
+          command -v gtlsclient
 
       - name: Check NGINX binary and modules
         run: |
@@ -154,7 +159,17 @@ jobs:
             -v "$PWD/ci-test/html:/usr/share/nginx/html:ro" \
             lunahttps:ci
 
-          sleep 3
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:18080/ > /dev/null; then
+              exit 0
+            fi
+
+            echo "Waiting for Luna-HTTP/S to become ready (${attempt}/30)..."
+            sleep 1
+          done
+
+          echo "Luna-HTTP/S did not become ready in time" >&2
+          exit 1
 
       - name: Test HTTP/1, HTTP/2 and error-page branding
         run: |
@@ -173,12 +188,12 @@ jobs:
 
       - name: Test HTTP/3 branding
         run: |
-          if curl -V | grep -q HTTP3; then
-            curl -kfsSI --http3-only https://127.0.0.1:18443/ | tr -d '\r' | tee http3.txt
-            grep -qi '^server: luna-http/s$' http3.txt
-          else
-            echo "Skipping HTTP/3 runtime test: curl has no HTTP3 support"
-          fi
+          timeout 20s gtlsclient \
+            127.0.0.1 18443 https://localhost:18443/ \
+            > http3.txt 2>&1
+
+          cat http3.txt
+          grep -qi '\[server: luna-http/s\]' http3.txt
 
       - name: Show container logs on failure
         if: failure()

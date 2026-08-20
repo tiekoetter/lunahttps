@@ -50,6 +50,10 @@ patch_http1() {
 patch_error_pages() {
   require_file "$error_file"
 
+  require_pattern '"<hr><center>nginx</center>" CRLF' "$error_file"
+  require_pattern '"<hr><center>" NGINX_VER "</center>" CRLF' "$error_file"
+  require_pattern '"<hr><center>" NGINX_VER_BUILD "</center>" CRLF' "$error_file"
+
   sed -i -E \
     's|"<hr><center>nginx</center>" CRLF|"<hr><center>Luna-HTTP/S</center>" CRLF|' \
     "$error_file"
@@ -69,10 +73,7 @@ patch_error_pages() {
 }
 
 patch_http2() {
-  if [ ! -f "$h2_file" ]; then
-    echo "HTTP/2 source not found, skipping: $h2_file"
-    return
-  fi
+  require_file "$h2_file"
 
   perl -0pi -e '
     s|static const u_char nginx\[5\] = \{ 0x84, 0xaa, 0x63, 0x55, 0xe7 \};|static size_t luna_len = ngx_http_v2_literal_size("luna-http/s");\n    static u_char luna[ngx_http_v2_literal_size("luna-http/s")];|s;
@@ -111,10 +112,7 @@ patch_http2() {
 }
 
 patch_http3() {
-  if [ ! -f "$h3_file" ]; then
-    echo "HTTP/3 source not found, skipping: $h3_file"
-    return
-  fi
+  require_file "$h3_file"
 
   # Patch only exact HTTP/3/QPACK server header values.
   # Important: do NOT globally replace NGINX_VER, because it also matches
@@ -156,4 +154,4 @@ grep -RIn 'luna-http/s\|Luna-HTTP/S' \
   "$header_file" \
   "$error_file" \
   "$h2_file" \
-  "$h3_file" 2>/dev/null || true
+  "$h3_file"

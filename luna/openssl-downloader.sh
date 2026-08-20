@@ -54,10 +54,21 @@ require_file() {
     [[ -f "$1" ]] || die "Required file not found: $1"
 }
 
+download_file() {
+    local destination="$1"
+    local url="$2"
+
+    curl --fail --location --show-error \
+        --retry 3 --retry-all-errors --connect-timeout 30 \
+        --proto '=https' --proto-redir '=https' \
+        --output "${destination}" "${url}"
+}
+
 safe_remove_dir() {
     local dir="$1"
     [[ -n "$dir" ]] || die "Refusing to remove empty path"
     [[ "$dir" != "/" ]] || die "Refusing to remove /"
+    [[ "$dir" == "${WORK_DIR}/"* ]] || die "Refusing to remove path outside ${WORK_DIR}: ${dir}"
     rm -rf -- "$dir"
 }
 
@@ -121,7 +132,7 @@ main() {
     DOWNLOAD_URL="${RELEASE_BASE_URL}/openssl-${OPENSSL_VERSION}/${FILENAME}"
 
     log "Downloading pinned OpenSSL ${OPENSSL_VERSION} from: ${DOWNLOAD_URL}"
-    curl -fL --retry 3 --retry-all-errors -o "${FILENAME}" "${DOWNLOAD_URL}"
+    download_file "${FILENAME}" "${DOWNLOAD_URL}"
 
     [[ -s "${FILENAME}" ]] || die "Downloaded tarball is missing or empty: ${FILENAME}"
 
@@ -154,12 +165,13 @@ main() {
             ;;
     esac
 
-    log "Replacing ${OPENSSL_DIR} atomically..."
+    log "Replacing ${OPENSSL_DIR}..."
     TMP_TARGET="$(mktemp -d "${TMP_ROOT}/openssl-lts.XXXXXX")"
     cp -a "${DL_DIR}/${EXTRACTED_DIR}/." "${TMP_TARGET}/"
 
     safe_remove_dir "${OPENSSL_DIR}"
     mv -- "${TMP_TARGET}" "${OPENSSL_DIR}"
+    safe_remove_dir "${DL_DIR}"
 
     log "OpenSSL source prepared successfully."
     printf '%b\n' "${GREEN}Final directory:${NC}"

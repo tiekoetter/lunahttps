@@ -262,7 +262,7 @@ CI validates:
 - compiled NGINX modules,
 - runtime HTTP/1.1 and HTTP/2 branding,
 - generated error page branding,
-- HTTP/3 branding when the GitHub Actions runner curl supports HTTP/3.
+- HTTP/3 connectivity and branding with a dedicated QUIC/HTTP/3 client.
 
 Docker image publishing runs after CI succeeds on the main branch, and can also be started manually.
 
