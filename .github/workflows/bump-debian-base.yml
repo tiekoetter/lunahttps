@@ -30,7 +30,7 @@ jobs:
           stable_codename="$(
             curl -fsSL --retry 3 --retry-all-errors \
               https://deb.debian.org/debian/dists/stable/Release \
-              | awk '$1 == "Codename:" { print $2; exit }'
+              | awk '$1 == "Codename:" && !found { print $2; found = 1 }'
           )"
           current_codename="$(grep -E '^ARG DEBIAN_VERSION=' Dockerfile | head -n1 | cut -d= -f2)"
 
