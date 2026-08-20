@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gnupg \
     build-essential \
+    libbrotli-dev \
     libpcre2-dev \
     zlib1g-dev \
     libmaxminddb-dev \
@@ -43,6 +44,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    libbrotli1 \
     libpcre2-8-0 \
     zlib1g \
     libmaxminddb0 \
