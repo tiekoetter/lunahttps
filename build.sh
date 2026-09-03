@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-readonly NGINX_VERSION="1.31.4"
+readonly NGINX_VERSION="1.31.5"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly LUNA_DIR="${SCRIPT_DIR}/luna"
