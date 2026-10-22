@@ -29,6 +29,8 @@ jobs:
         run: |
           git submodule sync --recursive
           git submodule update --init --remote
+          # Direct updates can change the nested commits recorded by a submodule.
+          git submodule foreach 'git submodule update --init --recursive'
 
       - name: Abort if any direct submodule is dirty internally
         run: |
