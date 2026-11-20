@@ -74,8 +74,8 @@ jobs:
 
       - name: Install HTTP/3 test client
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ngtcp2-client
+          sudo apt-get -o Acquire::Retries=5 update
+          sudo apt-get -o Acquire::Retries=5 install -y --no-install-recommends ngtcp2-client
           command -v gtlsclient
 
       - name: Check NGINX binary and modules
