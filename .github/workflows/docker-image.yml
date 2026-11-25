@@ -34,11 +34,15 @@ jobs:
     outputs:
       digest: ${{ steps.build.outputs.digest }}
 
-    # For workflow_run, only publish when CI succeeded.
+    # For workflow_run, only publish when CI succeeded for a commit of this
+    # repository. The branch filter above matches the head branch name, which a
+    # pull request from a fork can also set to "main".
     # Tag pushes and manual runs run directly.
     if: >
       github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event != 'pull_request' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
 
     steps:
       - name: Resolve source tag
@@ -109,11 +113,15 @@ jobs:
     outputs:
       digest: ${{ steps.build.outputs.digest }}
 
-    # For workflow_run, only publish when CI succeeded.
+    # For workflow_run, only publish when CI succeeded for a commit of this
+    # repository. The branch filter above matches the head branch name, which a
+    # pull request from a fork can also set to "main".
     # Tag pushes and manual runs run directly.
     if: >
       github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event != 'pull_request' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
 
     steps:
       - name: Resolve source tag
