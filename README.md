@@ -87,6 +87,15 @@ The branding patch is applied to HTTP/1.x, HTTP/2, HTTP/3, and generated NGINX e
 luna/branding-patch.sh
 ```
 
+The binary also identifies itself as a Luna-HTTP/S build on the command line:
+
+```text
+$ nginx -v
+nginx version: nginx/<nginx-version> (lunahttps)
+```
+
+The `nginx/<nginx-version>` prefix is unchanged, so tools that detect NGINX or parse its version keep working. The build name is set with NGINX's own `--build` option, the same mechanism distribution packages use.
+
 ---
 
 ## 🐳 Docker Image
@@ -267,7 +276,7 @@ CI validates:
 - shell scripts with ShellCheck,
 - required submodules,
 - Docker image build,
-- compiled NGINX modules,
+- compiled NGINX modules and build name,
 - runtime HTTP/1.1 and HTTP/2 branding,
 - generated error page branding,
 - HTTP/3 connectivity and branding with a dedicated QUIC/HTTP/3 client.
