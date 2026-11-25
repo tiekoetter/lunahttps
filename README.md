@@ -97,6 +97,12 @@ The Docker image is published to GitHub Container Registry:
 docker pull ghcr.io/tiekoetter/lunahttps:latest
 ```
 
+Published images carry a signed build provenance attestation. To check that an image was built by this repository's workflow, use the GitHub CLI:
+
+```bash
+gh attestation verify oci://ghcr.io/tiekoetter/lunahttps:latest --repo tiekoetter/lunahttps
+```
+
 Example `docker-compose.yml`:
 
 ```yaml
@@ -266,14 +272,18 @@ CI validates:
 - generated error page branding,
 - HTTP/3 connectivity and branding with a dedicated QUIC/HTTP/3 client.
 
-Docker image publishing runs after CI succeeds on the main branch, and can also be started manually.
+Docker image publishing runs after CI succeeds on the main branch, and can also be started manually. Each published multi-arch image gets a signed build provenance attestation.
 
 Additional maintenance workflows may open PRs for:
 
 - NGINX mainline version bumps,
-- OpenSSL version/hash bumps to the latest stable release,
+- OpenSSL version/hash bumps to the latest stable release, after verifying the release signature,
 - Debian base image codename updates,
-- submodule updates.
+- submodule updates, listing the upstream commits.
+
+GitHub Actions are referenced by exact version tag and updated through Dependabot pull requests.
+
+To report a vulnerability, see the [security policy](.github/SECURITY.md).
 
 ---
 
@@ -287,8 +297,10 @@ Additional maintenance workflows may open PRs for:
 │   ├── branding-patch.sh
 │   ├── nginx-signing-keys.txt
 │   ├── openssl-downloader.sh
+│   ├── openssl-version.env
 │   └── modules
 └── .github
+    ├── scripts
     └── workflows
 ```
 
@@ -302,6 +314,7 @@ luna/nginx-signing-keys.txt  Pinned NGINX source signing keys
 luna/openssl-downloader.sh   OpenSSL download/preparation script
 luna/openssl-version.env     Pinned OpenSSL version and SHA256
 luna/modules/                NGINX third-party modules as submodules
+.github/scripts/             Helper scripts used by the workflows
 ```
 
 ---
