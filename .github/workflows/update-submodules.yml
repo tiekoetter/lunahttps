@@ -19,10 +19,11 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v7
         with:
           submodules: recursive
+          # Full history is needed to list the upstream commits in the pull request.
           fetch-depth: 0
 
       - name: Update direct submodules to latest remote commits
@@ -56,24 +57,41 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Show updated submodule status
+      - name: Open pull request
         if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BRANCH: chore/update-submodules
+          PR_TITLE: "chore(submodules): update submodules"
+          PR_LABELS: dependencies,submodules
+          PR_PATHS: luna/modules
         run: |
-          git diff --submodule=log
-          git submodule status
+          set -euo pipefail
 
-      - name: Create pull request
-        if: steps.changes.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v8
-        with:
-          commit-message: "chore(submodules): update submodules"
-          title: "chore(submodules): update submodules"
-          body: |
-            Automated submodule update.
+          # Upstream commit subjects are untrusted text: keep them inside a code
+          # block and drop backticks so they cannot break out of it.
+          PR_BODY="$(
+            echo "Automated submodule update."
+            echo
+            echo "These modules are compiled into the server, so review the upstream changes before merging."
 
-            This PR updates the repository submodules to their latest upstream commits.
-          branch: ci/update-submodules
-          delete-branch: true
-          labels: |
-            dependencies
-            submodules
+            while IFS= read -r path; do
+              old="$(git rev-parse "HEAD:${path}")"
+              new="$(git -C "${path}" rev-parse HEAD)"
+              url="$(git -C "${path}" remote get-url origin)"
+
+              echo
+              echo "### \`${path#luna/modules/}\`"
+              echo
+              echo "${url%.git}/compare/${old}...${new}"
+              echo
+              echo '```text'
+              git -C "${path}" log --format='%h %s' --max-count=50 "${old}..${new}" | tr -d '`' ||
+                echo "(commit list unavailable)"
+              echo '```'
+            done < <(git diff --name-only --ignore-submodules=dirty -- luna/modules)
+          )"
+          export PR_BODY
+
+          echo "${PR_BODY}"
+          .github/scripts/open-pull-request.sh

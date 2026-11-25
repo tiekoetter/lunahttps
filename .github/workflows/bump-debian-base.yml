@@ -1,9 +1,9 @@
 name: Bump Debian base image
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 1 * * 1"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v7
 
       - name: Check current Debian stable codename
@@ -27,56 +27,56 @@ jobs:
         run: |
           set -euo pipefail
 
-          stable_codename="$(
+          STABLE="$(
             curl -fsSL --retry 3 --retry-all-errors \
               https://deb.debian.org/debian/dists/stable/Release \
               | awk '$1 == "Codename:" && !found { print $2; found = 1 }'
           )"
-          current_codename="$(grep -E '^ARG DEBIAN_VERSION=' Dockerfile | head -n1 | cut -d= -f2)"
+          CURRENT="$(grep -E '^ARG DEBIAN_VERSION=' Dockerfile | head -n1 | cut -d= -f2)"
 
-          if ! [[ "${stable_codename}" =~ ^[a-z][a-z0-9-]*$ ]]; then
-            echo "Invalid Debian stable codename: ${stable_codename}" >&2
+          if ! [[ "${STABLE}" =~ ^[a-z][a-z0-9-]*$ ]]; then
+            echo "Invalid Debian stable codename: ${STABLE}" >&2
             exit 1
           fi
 
-          if ! [[ "${current_codename}" =~ ^[a-z][a-z0-9-]*$ ]]; then
-            echo "Invalid Dockerfile Debian codename: ${current_codename}" >&2
+          if ! [[ "${CURRENT}" =~ ^[a-z][a-z0-9-]*$ ]]; then
+            echo "Invalid Dockerfile Debian codename: ${CURRENT}" >&2
             exit 1
           fi
 
-          echo "stable_codename=${stable_codename}" >> "$GITHUB_OUTPUT"
-          echo "current_codename=${current_codename}" >> "$GITHUB_OUTPUT"
+          echo "Dockerfile Debian codename: ${CURRENT}"
+          echo "Debian stable codename: ${STABLE}"
 
-          echo "Current Dockerfile Debian version: ${current_codename}"
-          echo "Current Debian stable codename: ${stable_codename}"
+          echo "stable=${STABLE}" >> "$GITHUB_OUTPUT"
+          echo "current=${CURRENT}" >> "$GITHUB_OUTPUT"
 
       - name: Update Dockerfile
-        if: steps.debian.outputs.current_codename != steps.debian.outputs.stable_codename
+        if: steps.debian.outputs.current != steps.debian.outputs.stable
+        env:
+          STABLE: ${{ steps.debian.outputs.stable }}
         run: |
-          sed -i -E \
-            "s/^ARG DEBIAN_VERSION=.*/ARG DEBIAN_VERSION=${{ steps.debian.outputs.stable_codename }}/" \
-            Dockerfile
+          set -euo pipefail
 
-      - name: Create pull request
-        if: steps.debian.outputs.current_codename != steps.debian.outputs.stable_codename
-        uses: peter-evans/create-pull-request@v8
-        with:
-          branch: chore/bump-debian-${{ steps.debian.outputs.stable_codename }}
-          delete-branch: true
-          title: "chore(docker): bump Debian base to ${{ steps.debian.outputs.stable_codename }}"
-          commit-message: "chore(docker): bump Debian base to ${{ steps.debian.outputs.stable_codename }}"
-          body: |
-            Debian stable appears to have changed.
+          sed -i -E "s/^ARG DEBIAN_VERSION=.*/ARG DEBIAN_VERSION=${STABLE}/" Dockerfile
+          git diff -- Dockerfile
 
-            This PR updates the Docker base image codename:
+      - name: Open pull request
+        if: steps.debian.outputs.current != steps.debian.outputs.stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BRANCH: chore/bump-debian-${{ steps.debian.outputs.stable }}
+          PR_TITLE: "chore(docker): bump Debian base from ${{ steps.debian.outputs.current }} to ${{ steps.debian.outputs.stable }}"
+          PR_LABELS: dependencies,docker,debian
+          PR_PATHS: Dockerfile
+          PR_BODY: |
+            Debian stable has changed.
+
+            This updates the Docker base image codename:
 
             ```diff
-            - ARG DEBIAN_VERSION=${{ steps.debian.outputs.current_codename }}
-            + ARG DEBIAN_VERSION=${{ steps.debian.outputs.stable_codename }}
+            - ARG DEBIAN_VERSION=${{ steps.debian.outputs.current }}
+            + ARG DEBIAN_VERSION=${{ steps.debian.outputs.stable }}
             ```
 
-            This should be reviewed carefully because a Debian major release bump can affect build dependencies, OpenSSL, NGINX modules, and runtime libraries.
-          labels: |
-            dependencies
-            docker
-            debian
+            Review carefully: a Debian major release can affect build dependencies, NGINX modules, and runtime libraries.
+        run: .github/scripts/open-pull-request.sh

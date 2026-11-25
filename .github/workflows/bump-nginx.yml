@@ -3,7 +3,7 @@ name: Bump NGINX mainline version
 on:
   workflow_dispatch:
   schedule:
-    - cron: '10 5 * * *'
+    - cron: "10 5 * * *"
 
 permissions:
   contents: write
@@ -21,12 +21,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Determine latest NGINX mainline from CHANGES
         id: latest
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -48,64 +45,55 @@ jobs:
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
 
       - name: Read current NGINX_VERSION from build.sh
-        id: current_build
-        shell: bash
+        id: current
         run: |
           set -euo pipefail
 
-          test -f build.sh || { echo "build.sh not found" >&2; exit 1; }
-
-          CURR="$(
+          CURRENT="$(
             sed -nE 's/^[[:space:]]*readonly[[:space:]]+NGINX_VERSION[[:space:]]*=[[:space:]]*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' build.sh \
               | head -n1
           )"
 
-          if [ -z "$CURR" ]; then
+          if [ -z "$CURRENT" ]; then
             echo "Could not find readonly NGINX_VERSION in build.sh" >&2
             exit 1
           fi
 
-          echo "Detected build.sh version: $CURR"
-          echo "current=$CURR" >> "$GITHUB_OUTPUT"
+          echo "Detected build.sh version: $CURRENT"
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
 
-      - name: Update build.sh if needed
-        if: steps.latest.outputs.latest != steps.current_build.outputs.current
-        shell: bash
+      - name: Update build.sh
+        if: steps.latest.outputs.latest != steps.current.outputs.current
+        env:
+          LATEST: ${{ steps.latest.outputs.latest }}
         run: |
           set -euo pipefail
 
           sed -i -E \
-            's|^([[:space:]]*readonly[[:space:]]+NGINX_VERSION[[:space:]]*=[[:space:]]*)"([0-9]+\.[0-9]+\.[0-9]+)"(.*)$|\1"${{ steps.latest.outputs.latest }}"\3|' \
+            "s|^([[:space:]]*readonly[[:space:]]+NGINX_VERSION[[:space:]]*=[[:space:]]*)\"[0-9]+\.[0-9]+\.[0-9]+\"|\1\"${LATEST}\"|" \
             build.sh
 
           grep -nE '^[[:space:]]*readonly[[:space:]]+NGINX_VERSION[[:space:]]*=' build.sh
 
           curl -fsI --retry 3 --retry-all-errors \
-            "https://nginx.org/download/nginx-${{ steps.latest.outputs.latest }}.tar.gz" > /dev/null
+            "https://nginx.org/download/nginx-${LATEST}.tar.gz" > /dev/null
 
           git diff -- build.sh
-          echo "Updated build.sh to ${{ steps.latest.outputs.latest }}"
 
-      - name: Create pull request
-        if: steps.latest.outputs.latest != steps.current_build.outputs.current
-        uses: peter-evans/create-pull-request@v8
-        with:
-          commit-message: "[chore] Bump NGINX mainline from ${{ steps.current_build.outputs.current }} to ${{ steps.latest.outputs.latest }}"
-          title: "[chore] Bump NGINX mainline from ${{ steps.current_build.outputs.current }} to ${{ steps.latest.outputs.latest }}"
-          body: |
+      - name: Open pull request
+        if: steps.latest.outputs.latest != steps.current.outputs.current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BRANCH: chore/bump-nginx-${{ steps.latest.outputs.latest }}
+          PR_TITLE: "chore(nginx): bump NGINX mainline from ${{ steps.current.outputs.current }} to ${{ steps.latest.outputs.latest }}"
+          PR_LABELS: dependencies,nginx,docker
+          PR_PATHS: build.sh
+          PR_BODY: |
             Automated update for the latest NGINX mainline release.
 
-            - Previous `build.sh` version: `${{ steps.current_build.outputs.current }}`
+            - Previous version: `${{ steps.current.outputs.current }}`
             - New version: `${{ steps.latest.outputs.latest }}`
+            - Changes: https://nginx.org/en/CHANGES
 
-            This updates `NGINX_VERSION` in `build.sh`, which is used by both host and Docker builds.
-
-            The workflow also verifies that the upstream NGINX tarball exists.
-          branch: chore/bump-nginx-${{ steps.latest.outputs.latest }}
-          delete-branch: true
-          labels: |
-            dependencies
-            nginx
-            docker
-          add-paths: |
-            build.sh
+            This updates `NGINX_VERSION` in `build.sh`, which is used by both host and Docker builds. The build verifies the release signature against the keys pinned in `luna/nginx-signing-keys.txt`.
+        run: .github/scripts/open-pull-request.sh
