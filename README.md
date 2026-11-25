@@ -13,6 +13,7 @@ Project information is available at [lunahttps.tiekoetter.net](https://lunahttps
 - **Based on NGINX mainline**
 - **OpenSSL with TLS 1.3 + kTLS** for modern transport security and improved performance
 - **Post-quantum cryptography capable out of the box** through OpenSSL, including support for ML-KEM, ML-DSA, and SLH-DSA
+- **Encrypted ClientHello (ECH)** support, with a helper script for setup and key rotation
 - **HTTP/2 support**
 - **HTTP/3 / QUIC support** for reduced latency and faster connections
 - **Brotli compression** for reduced bandwidth usage and faster page loads
@@ -64,6 +65,50 @@ Luna-HTTP/S is built with the latest stable OpenSSL release, which includes supp
 This makes the build post-quantum capable out of the box and suitable for testing hybrid TLS key exchange and future-facing cryptographic deployments.
 
 Actual post-quantum behavior depends on client support, TLS group configuration, OpenSSL defaults, and interoperability with the connecting peer.
+
+## 🕶️ Encrypted ClientHello (ECH)
+
+Luna-HTTP/S supports TLS 1.3 Encrypted ClientHello ([RFC 9849](https://datatracker.ietf.org/doc/html/rfc9849)) through the NGINX `ssl_ech_file` directive. ECH encrypts the requested hostname in the TLS handshake, so an observer only sees a shared public name. It works for HTTP/1.1, HTTP/2, and HTTP/3.
+
+On a host install, the helper script sets it up for all server blocks:
+
+```bash
+sudo ./luna/ech-helper.sh --public-name public.example.com
+```
+
+The public name is the hostname that stays visible. A server block with a valid certificate for it must exist, because clients fall back to it when ECH fails.
+
+The script:
+
+1. generates an ECH key in `/etc/nginx/ech/`,
+2. writes one file, `luna-ech.conf`, into `/etc/nginx/sites-enabled/`. It is loaded at `http` level, so every server block inherits it and existing files are not edited,
+3. archives the directory to `/etc/nginx/sites-enabled.ech-backup-<timestamp>.tar.gz` before changing it (symlinks are stored as links),
+4. checks the result with NGINX, restores the previous state if the check fails, and reloads NGINX,
+5. prints the `ECHConfigList` to publish in DNS.
+
+Running it again changes only what is missing. Other common calls:
+
+```bash
+sudo ./luna/ech-helper.sh --rotate           # new key; the current one is kept as previous key
+sudo ./luna/ech-helper.sh /etc/nginx/conf.d  # another directory included inside the http block
+./luna/ech-helper.sh --help
+```
+
+Clients only use ECH once the printed value is published in the HTTPS DNS record of each protected hostname:
+
+```text
+example.com. 300 IN HTTPS 1 . alpn="h3,h2" ech="<ECHConfigList>"
+```
+
+After `--rotate`, update the DNS records. The previous key stays valid until the next rotation.
+
+To see whether a connection used ECH, log `$ssl_ech_status` (for example `SUCCESS`, `GREASE`, or `NOT_TRIED`).
+
+Notes:
+
+- Generating keys needs the `openssl ech` command from OpenSSL 4.0 or newer. The script uses the binary that `build.sh` leaves in `luna/openssl/.openssl/bin/`, then `openssl` from `PATH`; `--openssl PATH` overrides both.
+- Do not set `ssl_ech_file` inside individual server blocks. NGINX only uses the ECH keys of the default server of a listening socket.
+- The Docker image does not include the helper. Generate the key elsewhere with `openssl ech` from OpenSSL 4.0 or newer, mount it, and add `ssl_ech_file` at `http` level.
 
 ---
 
@@ -304,6 +349,7 @@ To report a vulnerability, see the [security policy](.github/SECURITY.md).
 ├── Dockerfile
 ├── luna
 │   ├── branding-patch.sh
+│   ├── ech-helper.sh
 │   ├── nginx-signing-keys.txt
 │   ├── openssl-downloader.sh
 │   ├── openssl-version.env
@@ -319,6 +365,7 @@ Important paths:
 build.sh                     Host build/install script
 Dockerfile                   Container image build
 luna/branding-patch.sh       Luna server/error-page branding patch
+luna/ech-helper.sh           Encrypted ClientHello setup and key rotation
 luna/nginx-signing-keys.txt  Pinned NGINX source signing keys
 luna/openssl-downloader.sh   OpenSSL download/preparation script
 luna/openssl-version.env     Pinned OpenSSL version and SHA256
