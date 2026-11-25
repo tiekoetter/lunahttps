@@ -5,7 +5,9 @@ IFS=$'\n\t'
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly WORK_DIR="${SCRIPT_DIR}"
-readonly OPENSSL_DIR="${WORK_DIR}/openssl-lts"
+readonly OPENSSL_DIR="${WORK_DIR}/openssl"
+# Source directory name used before the switch to the latest stable release.
+readonly LEGACY_OPENSSL_DIR="${WORK_DIR}/openssl-lts"
 readonly TMP_ROOT="${WORK_DIR}/.tmp"
 readonly DL_DIR="${TMP_ROOT}/openssl-download"
 readonly OPENSSL_VERSION_FILE="${WORK_DIR}/openssl-version.env"
@@ -79,16 +81,12 @@ load_openssl_pin() {
     # shellcheck disable=SC1091
     . "${OPENSSL_VERSION_FILE}"
 
-    [[ "${OPENSSL_SERIES:-}" =~ ^[0-9]+\.[0-9]+$ ]] || \
-        die "Invalid OPENSSL_SERIES in ${OPENSSL_VERSION_FILE}"
     [[ "${OPENSSL_VERSION:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
         die "Invalid OPENSSL_VERSION in ${OPENSSL_VERSION_FILE}"
     [[ "${OPENSSL_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] || \
         die "Invalid OPENSSL_SHA256 in ${OPENSSL_VERSION_FILE}"
-    [[ "${OPENSSL_VERSION}" == "${OPENSSL_SERIES}".* ]] || \
-        die "OPENSSL_VERSION must belong to OPENSSL_SERIES in ${OPENSSL_VERSION_FILE}"
 
-    readonly OPENSSL_SERIES OPENSSL_VERSION OPENSSL_SHA256
+    readonly OPENSSL_VERSION OPENSSL_SHA256
 }
 
 file_sha256() {
@@ -166,10 +164,11 @@ main() {
     esac
 
     log "Replacing ${OPENSSL_DIR}..."
-    TMP_TARGET="$(mktemp -d "${TMP_ROOT}/openssl-lts.XXXXXX")"
+    TMP_TARGET="$(mktemp -d "${TMP_ROOT}/openssl.XXXXXX")"
     cp -a "${DL_DIR}/${EXTRACTED_DIR}/." "${TMP_TARGET}/"
 
     safe_remove_dir "${OPENSSL_DIR}"
+    safe_remove_dir "${LEGACY_OPENSSL_DIR}"
     mv -- "${TMP_TARGET}" "${OPENSSL_DIR}"
     safe_remove_dir "${DL_DIR}"
 

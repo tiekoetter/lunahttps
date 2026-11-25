@@ -8,7 +8,7 @@ readonly SCRIPT_DIR
 readonly LUNA_DIR="${SCRIPT_DIR}/luna"
 readonly BRANDING_PATCH_SCRIPT="${LUNA_DIR}/branding-patch.sh"
 readonly NGINX_SIGNING_KEYS_FILE="${LUNA_DIR}/nginx-signing-keys.txt"
-readonly OPENSSL_DIR="${LUNA_DIR}/openssl-lts"
+readonly OPENSSL_DIR="${LUNA_DIR}/openssl"
 readonly MODULES_DIR="${LUNA_DIR}/modules"
 readonly BUILD_ROOT="${LUNA_DIR}/build"
 readonly BUILD_DIR="${BUILD_ROOT}/nginx-build-${NGINX_VERSION}"
@@ -78,7 +78,7 @@ print_banner() {
  Project:        Luna-HTTP/S
  Mode:           ${BUILD_MODE}
  Upstream:       NGINX ${NGINX_VERSION}
- TLS stack:      OpenSSL LTS with TLS 1.3 and kTLS
+ TLS stack:      OpenSSL (latest stable) with TLS 1.3 and kTLS
  Protocols:      HTTP/1.1, HTTP/2, HTTP/3 / QUIC
 
  Built-in modules:
@@ -245,7 +245,10 @@ configure_luna() {
     log "Configuring Luna-HTTP/S build..."
     cd "${SRC_DIR}"
 
+    # The build name is shown by "nginx -v" and "nginx -V" after the version,
+    # like distribution packages do: nginx/<version> (luna-http/s).
     ./configure \
+        --build=luna-http/s \
         --prefix=/usr/share/nginx \
         --sbin-path=/usr/sbin/nginx \
         --conf-path=/etc/nginx/nginx.conf \

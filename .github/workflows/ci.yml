@@ -24,7 +24,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run ShellCheck
         run: |
@@ -36,6 +38,7 @@ jobs:
           shellcheck build.sh
           shellcheck -x luna/openssl-downloader.sh
           shellcheck luna/branding-patch.sh
+          shellcheck .github/scripts/open-pull-request.sh
 
   docker-build-test:
     name: Docker build and runtime test
@@ -44,9 +47,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Verify submodules
         run: |
@@ -58,10 +62,10 @@ jobs:
           test -f luna/modules/ngx_brotli/config
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v4.4.1
 
       - name: Build CI image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           file: ./Dockerfile
@@ -83,11 +87,15 @@ jobs:
           docker run --rm lunahttps:ci nginx -t
           docker run --rm lunahttps:ci nginx -V 2>&1 | tee nginx-version.txt
 
+          grep -qx -- 'nginx version: nginx/[0-9.]* (luna-http/s)' nginx-version.txt
           grep -q -- '--with-http_ssl_module' nginx-version.txt
           grep -q -- '--with-http_v2_module' nginx-version.txt
           grep -q -- '--with-http_v3_module' nginx-version.txt
           grep -q -- '--with-stream' nginx-version.txt
-          grep -q -- 'OpenSSL 3.5' nginx-version.txt
+
+          # shellcheck source=/dev/null
+          . luna/openssl-version.env
+          grep -q -- "built with OpenSSL ${OPENSSL_VERSION} " nginx-version.txt
 
       - name: Prepare runtime test config
         run: |
