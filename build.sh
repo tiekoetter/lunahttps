@@ -246,9 +246,9 @@ configure_luna() {
     cd "${SRC_DIR}"
 
     # The build name is shown by "nginx -v" and "nginx -V" after the version,
-    # like distribution packages do: nginx/<version> (lunahttps).
+    # like distribution packages do: nginx/<version> (luna-http/s).
     ./configure \
-        --build=lunahttps \
+        --build=luna-http/s \
         --prefix=/usr/share/nginx \
         --sbin-path=/usr/sbin/nginx \
         --conf-path=/etc/nginx/nginx.conf \

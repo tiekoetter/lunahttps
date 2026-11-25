@@ -91,7 +91,7 @@ The binary also identifies itself as a Luna-HTTP/S build on the command line:
 
 ```text
 $ nginx -v
-nginx version: nginx/<nginx-version> (lunahttps)
+nginx version: nginx/<nginx-version> (luna-http/s)
 ```
 
 The `nginx/<nginx-version>` prefix is unchanged, so tools that detect NGINX or parse its version keep working. The build name is set with NGINX's own `--build` option, the same mechanism distribution packages use.

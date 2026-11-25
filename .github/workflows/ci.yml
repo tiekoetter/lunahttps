@@ -87,7 +87,7 @@ jobs:
           docker run --rm lunahttps:ci nginx -t
           docker run --rm lunahttps:ci nginx -V 2>&1 | tee nginx-version.txt
 
-          grep -qx -- 'nginx version: nginx/[0-9.]* (lunahttps)' nginx-version.txt
+          grep -qx -- 'nginx version: nginx/[0-9.]* (luna-http/s)' nginx-version.txt
           grep -q -- '--with-http_ssl_module' nginx-version.txt
           grep -q -- '--with-http_v2_module' nginx-version.txt
           grep -q -- '--with-http_v3_module' nginx-version.txt
