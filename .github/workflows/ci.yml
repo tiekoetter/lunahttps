@@ -88,7 +88,10 @@ jobs:
           grep -q -- '--with-http_v2_module' nginx-version.txt
           grep -q -- '--with-http_v3_module' nginx-version.txt
           grep -q -- '--with-stream' nginx-version.txt
-          grep -q -- 'OpenSSL 3.5' nginx-version.txt
+
+          # shellcheck source=/dev/null
+          . luna/openssl-version.env
+          grep -q -- "built with OpenSSL ${OPENSSL_VERSION} " nginx-version.txt
 
       - name: Prepare runtime test config
         run: |

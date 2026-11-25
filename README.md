@@ -2,7 +2,7 @@
 
 Custom-built NGINX with enhanced performance, modern protocol support, Docker image builds, and security-focused features.
 
-Luna-HTTP/S is based on NGINX mainline and adds a curated build configuration with OpenSSL 3.5.x, TLS 1.3, post-quantum cryptography support, HTTP/2, HTTP/3 / QUIC, Brotli, real client IP handling, GeoIP2, advanced header manipulation, and response body substitution support.
+Luna-HTTP/S is based on NGINX mainline and adds a curated build configuration with the latest stable OpenSSL release, TLS 1.3, post-quantum cryptography support, HTTP/2, HTTP/3 / QUIC, Brotli, real client IP handling, GeoIP2, advanced header manipulation, and response body substitution support.
 
 Project information is available at [lunahttps.tiekoetter.net](https://lunahttps.tiekoetter.net).
 
@@ -12,7 +12,7 @@ Project information is available at [lunahttps.tiekoetter.net](https://lunahttps
 
 - **Based on NGINX mainline**
 - **OpenSSL with TLS 1.3 + kTLS** for modern transport security and improved performance
-- **Post-quantum cryptography capable out of the box** through OpenSSL 3.5.x, including support for ML-KEM, ML-DSA, and SLH-DSA
+- **Post-quantum cryptography capable out of the box** through OpenSSL, including support for ML-KEM, ML-DSA, and SLH-DSA
 - **HTTP/2 support**
 - **HTTP/3 / QUIC support** for reduced latency and faster connections
 - **Brotli compression** for reduced bandwidth usage and faster page loads
@@ -49,15 +49,17 @@ OpenSSL is downloaded and prepared by:
 luna/openssl-downloader.sh
 ```
 
-The OpenSSL LTS version and tarball SHA256 are pinned in:
+The OpenSSL version and tarball SHA256 are pinned in:
 
 ```text
 luna/openssl-version.env
 ```
 
+The pin follows the latest stable OpenSSL release (no alpha or beta versions), not an LTS series.
+
 ## 🔐 Post-Quantum Cryptography
 
-Luna-HTTP/S is built with OpenSSL 3.5.x, which includes support for post-quantum cryptography algorithms such as ML-KEM, ML-DSA, and SLH-DSA.
+Luna-HTTP/S is built with the latest stable OpenSSL release, which includes support for post-quantum cryptography algorithms such as ML-KEM, ML-DSA, and SLH-DSA.
 
 This makes the build post-quantum capable out of the box and suitable for testing hybrid TLS key exchange and future-facing cryptographic deployments.
 
@@ -269,7 +271,7 @@ Docker image publishing runs after CI succeeds on the main branch, and can also 
 Additional maintenance workflows may open PRs for:
 
 - NGINX mainline version bumps,
-- OpenSSL LTS version/hash bumps,
+- OpenSSL version/hash bumps to the latest stable release,
 - Debian base image codename updates,
 - submodule updates.
 
@@ -298,7 +300,7 @@ Dockerfile                   Container image build
 luna/branding-patch.sh       Luna server/error-page branding patch
 luna/nginx-signing-keys.txt  Pinned NGINX source signing keys
 luna/openssl-downloader.sh   OpenSSL download/preparation script
-luna/openssl-version.env     Pinned OpenSSL LTS version and SHA256
+luna/openssl-version.env     Pinned OpenSSL version and SHA256
 luna/modules/                NGINX third-party modules as submodules
 ```
 

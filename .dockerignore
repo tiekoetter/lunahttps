@@ -3,7 +3,7 @@
 
 # Local build outputs
 luna/build
-luna/openssl-lts
+luna/openssl
 luna/.tmp
 
 # CI/runtime test artifacts

@@ -1,4 +1,4 @@
-name: Bump OpenSSL LTS version
+name: Bump OpenSSL version
 
 on:
   workflow_dispatch:
@@ -13,6 +13,11 @@ concurrency:
   group: bump-openssl
   cancel-in-progress: false
 
+env:
+  # Primary key fingerprint of the OpenSSL release signing certificate, as
+  # published on https://openssl-library.org/source/.
+  OPENSSL_SIGNING_KEY: B146647E45A7B33947AB226B2A2C87D161692D40
+
 jobs:
   bump-openssl:
     runs-on: ubuntu-latest
@@ -21,118 +26,136 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Read current OpenSSL pin
         id: current
-        shell: bash
         run: |
           set -euo pipefail
-
-          test -f luna/openssl-version.env || {
-            echo "luna/openssl-version.env not found" >&2
-            exit 1
-          }
 
           # shellcheck source=/dev/null
           . luna/openssl-version.env
 
-          : "${OPENSSL_SERIES:?OPENSSL_SERIES is required}"
           : "${OPENSSL_VERSION:?OPENSSL_VERSION is required}"
-          : "${OPENSSL_SHA256:?OPENSSL_SHA256 is required}"
 
-          {
-            echo "series=${OPENSSL_SERIES}"
-            echo "version=${OPENSSL_VERSION}"
-            echo "sha256=${OPENSSL_SHA256}"
-          } >> "$GITHUB_OUTPUT"
+          echo "Pinned OpenSSL release: ${OPENSSL_VERSION}"
+          echo "version=${OPENSSL_VERSION}" >> "$GITHUB_OUTPUT"
 
-          echo "Current OpenSSL ${OPENSSL_SERIES} pin: ${OPENSSL_VERSION}"
-
-      - name: Determine latest OpenSSL LTS release
+      - name: Determine latest stable OpenSSL release
         id: latest
-        shell: bash
+        env:
+          CURRENT: ${{ steps.current.outputs.version }}
         run: |
           set -euo pipefail
 
-          SERIES="${{ steps.current.outputs.series }}"
-          SERIES_RE="${SERIES//./\\.}"
           SOURCE_PAGE="$(curl -fsSL --retry 3 --retry-all-errors https://openssl-library.org/source/)"
 
+          # Pre-releases carry a suffix (openssl-4.2.0-beta1.tar.gz) and do not match.
           LATEST="$(
             printf '%s\n' "$SOURCE_PAGE" \
-              | grep -oE "openssl-${SERIES_RE}\\.[0-9]+\\.tar\\.gz" \
-              | sed -E 's/^openssl-([0-9]+\.[0-9]+\.[0-9]+)\.tar\.gz$/\1/' \
+              | { grep -oE 'openssl-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' || true; } \
+              | sed -E 's/^openssl-(.*)\.tar\.gz$/\1/' \
               | sort -V \
               | tail -n1
           )"
 
           if [ -z "$LATEST" ]; then
-            echo "Could not determine latest OpenSSL ${{ steps.current.outputs.series }} release" >&2
+            echo "Could not determine the latest stable OpenSSL release" >&2
             exit 1
           fi
 
-          FILENAME="openssl-${LATEST}.tar.gz"
-          BASE_URL="https://github.com/openssl/openssl/releases/download/openssl-${LATEST}"
-          SHA256_LINE="$(curl -fsSL --retry 3 --retry-all-errors "${BASE_URL}/${FILENAME}.sha256")"
-          SHA256="$(printf '%s\n' "$SHA256_LINE" | awk '{print $1}')"
-
-          if ! [[ "$SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-            echo "Invalid SHA256 from ${BASE_URL}/${FILENAME}.sha256: ${SHA256_LINE}" >&2
+          NEWEST="$(printf '%s\n' "$CURRENT" "$LATEST" | sort -V | tail -n1)"
+          if [ "$NEWEST" != "$LATEST" ]; then
+            echo "Latest listed release ${LATEST} is older than the pinned ${CURRENT}" >&2
             exit 1
           fi
 
-          curl -fsI --retry 3 --retry-all-errors "${BASE_URL}/${FILENAME}" > /dev/null
+          echo "Latest stable OpenSSL release: ${LATEST}"
+          echo "version=${LATEST}" >> "$GITHUB_OUTPUT"
 
-          {
-            echo "version=${LATEST}"
-            echo "sha256=${SHA256}"
-            echo "url=${BASE_URL}/${FILENAME}"
-          } >> "$GITHUB_OUTPUT"
+      - name: Download and verify the release
+        id: release
+        if: steps.latest.outputs.version != steps.current.outputs.version
+        env:
+          VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          set -euo pipefail
 
-          echo "Latest OpenSSL ${{ steps.current.outputs.series }} release: ${LATEST}"
+          TARBALL="openssl-${VERSION}.tar.gz"
+          URL="https://github.com/openssl/openssl/releases/download/openssl-${VERSION}/${TARBALL}"
+          WORK_DIR="$(mktemp -d)"
 
-      - name: Update OpenSSL pin if needed
-        if: |
-          steps.latest.outputs.version != steps.current.outputs.version ||
-          steps.latest.outputs.sha256 != steps.current.outputs.sha256
-        shell: bash
+          export GNUPGHOME="${WORK_DIR}/gnupg"
+          mkdir -m 700 "${GNUPGHOME}"
+
+          fetch() {
+            curl -fsSL --retry 3 --retry-all-errors \
+              --proto '=https' --proto-redir '=https' \
+              --output "$1" "$2"
+          }
+
+          fetch "${WORK_DIR}/${TARBALL}" "${URL}"
+          fetch "${WORK_DIR}/${TARBALL}.asc" "${URL}.asc"
+          fetch "${WORK_DIR}/pubkeys.asc" https://openssl-library.org/source/pubkeys.asc
+
+          gpg --batch --quiet --import "${WORK_DIR}/pubkeys.asc"
+
+          VERIFY_STATUS="$(
+            gpg --batch --status-fd 1 --verify \
+              "${WORK_DIR}/${TARBALL}.asc" "${WORK_DIR}/${TARBALL}"
+          )"
+
+          # pubkeys.asc also holds superseded keys; accept only a good signature
+          # that chains to the pinned primary key.
+          grep -q '^\[GNUPG:\] GOODSIG ' <<< "${VERIFY_STATUS}" || {
+            echo "GPG did not report a good signature for ${TARBALL}" >&2
+            exit 1
+          }
+
+          SIGNER="$(awk '$1 == "[GNUPG:]" && $2 == "VALIDSIG" { print $NF; exit }' <<< "${VERIFY_STATUS}")"
+          if [ "${SIGNER}" != "${OPENSSL_SIGNING_KEY}" ]; then
+            echo "${TARBALL} was not signed by the pinned OpenSSL key: ${SIGNER:-none}" >&2
+            exit 1
+          fi
+
+          SHA256="$(sha256sum "${WORK_DIR}/${TARBALL}" | awk '{print $1}')"
+
+          echo "Verified ${TARBALL} (signed by ${SIGNER})"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Update OpenSSL pin
+        if: steps.latest.outputs.version != steps.current.outputs.version
+        env:
+          VERSION: ${{ steps.latest.outputs.version }}
+          SHA256: ${{ steps.release.outputs.sha256 }}
         run: |
           set -euo pipefail
 
           sed -i -E \
-            's|^OPENSSL_VERSION=.*$|OPENSSL_VERSION="${{ steps.latest.outputs.version }}"|' \
-            luna/openssl-version.env
-
-          sed -i -E \
-            's|^OPENSSL_SHA256=.*$|OPENSSL_SHA256="${{ steps.latest.outputs.sha256 }}"|' \
+            -e "s|^OPENSSL_VERSION=.*|OPENSSL_VERSION=\"${VERSION}\"|" \
+            -e "s|^OPENSSL_SHA256=.*|OPENSSL_SHA256=\"${SHA256}\"|" \
             luna/openssl-version.env
 
           git diff -- luna/openssl-version.env
 
-      - name: Create pull request
-        if: |
-          steps.latest.outputs.version != steps.current.outputs.version ||
-          steps.latest.outputs.sha256 != steps.current.outputs.sha256
-        uses: peter-evans/create-pull-request@v8
-        with:
-          commit-message: "chore(openssl): bump OpenSSL ${{ steps.current.outputs.series }} from ${{ steps.current.outputs.version }} to ${{ steps.latest.outputs.version }}"
-          title: "chore(openssl): bump OpenSSL ${{ steps.current.outputs.series }} from ${{ steps.current.outputs.version }} to ${{ steps.latest.outputs.version }}"
-          body: |
-            Automated OpenSSL LTS pin update.
+      - name: Open pull request
+        if: steps.latest.outputs.version != steps.current.outputs.version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BRANCH: chore/bump-openssl-${{ steps.latest.outputs.version }}
+          PR_TITLE: "chore(openssl): bump OpenSSL from ${{ steps.current.outputs.version }} to ${{ steps.latest.outputs.version }}"
+          PR_LABELS: dependencies,openssl,security
+          PR_PATHS: luna/openssl-version.env
+          PR_BODY: |
+            Automated update to the latest stable OpenSSL release.
 
             - Previous version: `${{ steps.current.outputs.version }}`
             - New version: `${{ steps.latest.outputs.version }}`
-            - New SHA256: `${{ steps.latest.outputs.sha256 }}`
-            - Source tarball: ${{ steps.latest.outputs.url }}
+            - New SHA256: `${{ steps.release.outputs.sha256 }}`
+            - Source tarball: ${{ steps.release.outputs.url }}
+            - Release notes: https://github.com/openssl/openssl/releases/tag/openssl-${{ steps.latest.outputs.version }}
 
-            This updates the pinned OpenSSL release used by `luna/openssl-downloader.sh`.
-          branch: chore/bump-openssl-${{ steps.latest.outputs.version }}
-          delete-branch: true
-          labels: |
-            dependencies
-            openssl
-            security
-          add-paths: |
-            luna/openssl-version.env
+            The tarball's PGP signature was verified against the OpenSSL release key `${{ env.OPENSSL_SIGNING_KEY }}` before its SHA256 was pinned.
+
+            A change of the major or minor version can remove or change TLS features; check the release notes before merging.
+        run: .github/scripts/open-pull-request.sh
